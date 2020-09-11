@@ -116,10 +116,10 @@ class DevCog(Cog, name="Dev tools"):
             await ctx.invoke(self.load_cmd, name)
             return
         except:
-            await ctx.send(f":grimacing: **{name}** n'a pas pu être rechargée.")
+            await ctx.message.add_reaction(Emoji.CROSS)
             raise
         else:
-            await ctx.send(f":tada: L'extension **{name}** a bien été rechargée.")
+            await ctx.message.add_reaction(Emoji.CHECK)
 
     @command(name="load", aliases=["l"])
     @is_owner()
@@ -134,10 +134,10 @@ class DevCog(Cog, name="Dev tools"):
         try:
             self.bot.load_extension(name)
         except:
-            await ctx.send(f":grimacing: **{name}** n'a pas pu être chargée.")
+            await ctx.message.add_reaction(Emoji.CROSS)
             raise
         else:
-            await ctx.send(f":tada: L'extension **{name}** a bien été ajoutée !")
+            await ctx.message.add_reaction(Emoji.CHECK)
 
     # noinspection PyUnreachableCode
     @command(name="setup")
