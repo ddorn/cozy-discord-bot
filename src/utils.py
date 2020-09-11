@@ -78,9 +78,9 @@ async def confirm(ctx, bot, prompt):
 
     def check(reaction: discord.Reaction, u):
         return (
-            ctx.author == u
-            and msg.id == reaction.message.id
-            and str(reaction.emoji) in (Emoji.CHECK, Emoji.CROSS)
+                ctx.author == u
+                and msg.id == reaction.message.id
+                and str(reaction.emoji) in (Emoji.CHECK, Emoji.CROSS)
         )
 
     reaction, u = await bot.wait_for("reaction_add", check=check)
@@ -91,6 +91,17 @@ async def confirm(ctx, bot, prompt):
     else:
         await msg.clear_reaction(Emoji.CHECK)
         return False
+
+
+def send_all(f):
+    """Decorator that send each text message that a command in a cog yields."""
+
+    @wraps(f)
+    async def wrapper(self, ctx, *args, **kwargs):
+        async for msg in f(self, ctx, *args, **kwargs):
+            await ctx.send(msg)
+
+    return wrapper
 
 
 def start_time():

@@ -23,12 +23,14 @@ from ptpython.repl import embed
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import fg, french_join
+from src.utils import fg, french_join, send_all
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
-    "e": "errors",
+    "d": "dev",
+    "e": "epfl",
     "m": "misc",
+    "r": "errors",
     "u": "src.utils",
     "v": "dev",
 }
@@ -42,6 +44,7 @@ class DevCog(Cog, name="Dev tools"):
     def __init__(self, bot: CustomBot):
         self.bot = bot
         self.eval_locals = {}
+        self.power_warn_on = False
 
     @command(name="interrupt")
     @is_owner()
@@ -94,7 +97,7 @@ class DevCog(Cog, name="Dev tools"):
         (dev) Recharge une catégorie de commandes.
 
         A utiliser quand le code change. Arguments
-        possibles: `teams`, `tirages`, `dev`.
+        possibles: `epfl`, `misc`, `dev`.
         """
 
         if name is None:
@@ -103,6 +106,9 @@ class DevCog(Cog, name="Dev tools"):
             return
 
         name = self.full_cog_name(name)
+
+        if name == "src.cogs.dev":
+            self.power_warn_on = False  # Shut it down
 
         try:
             self.bot.reload_extension(name)
@@ -349,6 +355,32 @@ MSG_ID: {fg(msg.id, 0x03A678)}
 CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
             print(m)
 
+    @command(name="warn-power", aliases=["wp"])
+    @is_owner()
+    @send_all
+    async def warn_power_cmd(self, ctx: Context):
+        self.power_warn_on = not self.power_warn_on
+
+        await ctx.message.add_reaction(Emoji.CHECK)
+
+        if not self.power_warn_on:
+            # To prevent double message on deactivation
+            return
+
+        online = "1"
+        while self.power_warn_on:
+            await asyncio.sleep(20)
+            with open("/sys/class/power_supply/AC/online") as f:
+                now = f.read().strip()
+
+            if online != now:
+                online = now
+                if online == "1":
+                    yield "Le serveur est à nouveau branché sur le secteur !"
+                else:
+                    yield f":warning: {ctx.author.mention} Le serveur est sur batterie ! :warning:"
+
+        yield "I stopped checking the power supply."
 
 def setup(bot: CustomBot):
     bot.add_cog(DevCog(bot))
