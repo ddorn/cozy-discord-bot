@@ -1,7 +1,7 @@
 import asyncio
 from pprint import pprint
 from functools import wraps
-from io import StringIO
+from io import StringIO, BytesIO
 from typing import Union
 
 import discord
@@ -103,6 +103,16 @@ def send_all(f):
 
     return wrapper
 
+
+def with_max_len(string: Union[str, StringIO], maxi=1000) -> str:
+    if isinstance(string, StringIO):
+        string.seek(0)
+        string = string.read()
+
+    if len(string) > maxi:
+        string = string[:maxi//2-3] + "\n...\n" + string[-maxi//2+3:]
+
+    return string
 
 def start_time():
     return psutil.Process().create_time()

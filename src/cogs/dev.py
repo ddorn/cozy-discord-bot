@@ -23,7 +23,7 @@ from ptpython.repl import embed
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import fg, french_join, send_all
+from src.utils import fg, french_join, send_all, with_max_len
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -279,41 +279,29 @@ class DevCog(Cog, name="Dev tools"):
 
             embed = discord.Embed(title=str(e), color=discord.Colour.red())
             embed.add_field(
-                name="Query", value=f"```py\n{full_query}\n```", inline=False
+                name="Query", value=f"```py\n{with_max_len(full_query)}\n```", inline=False
             )
             embed.add_field(
-                name="Traceback", value=self.to_field_value(tb), inline=False
+                name="Traceback", value=f"```py\n{with_max_len(tb)}", inline=False
             )
         else:
             out = StringIO()
             pprint(resp, out)
 
             embed = discord.Embed(title="Result", color=discord.Colour.green())
-            embed.add_field(name="Query", value=f"```py\n{query}```", inline=False)
+            embed.add_field(name="Query", value=f"```py\n{with_max_len(query)}```", inline=False)
 
-            value = self.to_field_value(out)
+            value = f"```py\n{with_max_len(out)}"
             if resp is not None and value:
                 embed.add_field(name="Value", value=value, inline=False)
 
-        stdout = self.to_field_value(stdout)
+        stdout = f"```py\n{with_max_len(stdout)}```"
         if stdout:
             embed.add_field(name="Standard output", value=stdout, inline=False)
 
         embed.set_footer(text="You may edit your message.")
         return embed
 
-    def to_field_value(self, string: Union[str, StringIO]):
-        if isinstance(string, StringIO):
-            string.seek(0)
-            string = string.read()
-
-        if not string:
-            return
-
-        if len(string) > 1000:
-            string = string[:500] + "\n...\n" + string[-500:]
-
-        return f"```py\n{string}```"
 
     @command(name="eval", aliases=["e"])
     @is_owner()

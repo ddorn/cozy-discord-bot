@@ -5,7 +5,7 @@ from time import time
 __all__ = [
     "DISCORD_TOKEN",
     "Role",
-    "DIEGO",
+    "OWNER",
     "BOT",
     "EMBED_COLOR",
     "FRACTAL_URL",
@@ -29,7 +29,7 @@ if DISCORD_TOKEN is None:
     quit(1)
 
 GUILD = "690934836696973404"
-DIEGO = 430566197868625920  # Mon id
+OWNER = 430566197868625920  # Diego's id
 
 BOT = 753577454341455882
 PREFIX = "!"

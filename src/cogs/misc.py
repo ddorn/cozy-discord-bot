@@ -12,6 +12,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import partial
 import math
+from math import factorial
 from operator import attrgetter, itemgetter
 from time import time
 from typing import List, Set, Union
@@ -28,7 +29,7 @@ from discord.utils import get
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import has_role, send_and_bin, start_time
+from src.utils import has_role, send_and_bin, start_time, with_max_len
 
 # supported operators
 OPS = {
@@ -36,7 +37,7 @@ OPS = {
     ast.FloorDiv: op.floordiv, ast.Mod: op.mod,
     ast.Div: op.truediv, ast.Pow: op.pow, ast.BitXor: op.xor,
     ast.USub: op.neg, "abs": abs, "π": math.pi, "τ": math.tau,
-    "i": 1j,
+    "i": 1j, "fact": factorial,
 }
 
 for name in dir(math):
@@ -142,7 +143,7 @@ class MiscCog(Cog, name="Divers"):
     @command(name="calc", aliases=["="])
     async def calc_cmd(self, ctx, *args):
         """Effectue un calcul simple"""
-        with_tb = has_role(ctx.author, Role.DEV)
+        with_tb = ctx.author.id == OWNER
         embed = self._calc(ctx.message.content, with_tb)
         resp = await ctx.send(embed=embed)
 
@@ -169,9 +170,10 @@ class MiscCog(Cog, name="Divers"):
 
     def _calc(self, query: str, with_tb=False):
 
-        for prefix in ("! ", "!", "calc", "="):
+        for prefix in (PREFIX + " ", PREFIX, "calc", "="):
             if query.startswith(prefix):
                 query = query[len(prefix):]
+        # Replace implicit multiplication by explicit *
         query = re.sub(r"\b((\d)+(\.\d+)?)(?P<name>[a-zA-Z]+)\b", r"\1*\4", query)
 
         query = query.strip().strip("`")
@@ -199,7 +201,7 @@ class MiscCog(Cog, name="Divers"):
 
         embed = discord.Embed(title=discord.utils.escape_markdown(query), color=EMBED_COLOR)
         # embed.add_field(name="Entrée", value=f"`{query}`", inline=False)
-        embed.add_field(name="Valeur", value=f"`{result}`", inline=False)
+        embed.add_field(name="Valeur", value=f"`{with_max_len(str(result), 1022)}`", inline=False)
         if ex and with_tb:
             embed.add_field(name="Erreur", value=f"{ex.__class__.__name__}: {ex}", inline=False)
             trace = io.StringIO()

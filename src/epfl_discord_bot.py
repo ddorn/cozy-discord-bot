@@ -7,7 +7,7 @@ from src.core import CustomBot
 def start():
     # We allow "! " to catch people that put a space in their commands.
     # It must be in first otherwise "!" always match first and the space is not recognised
-    bot = CustomBot((PREFIX + " ", PREFIX), case_insensitive=True, owner_id=DIEGO)
+    bot = CustomBot((PREFIX + " ", PREFIX), case_insensitive=True, owner_id=OWNER)
 
     @bot.event
     async def on_ready():
