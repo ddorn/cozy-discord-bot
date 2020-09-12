@@ -15,6 +15,7 @@ def start():
 
     bot.remove_command("help")
     bot.load_extension("src.cogs.dev")
+    bot.load_extension("src.cogs.epfl")
     bot.load_extension("src.cogs.errors")
     bot.load_extension("src.cogs.misc")
     bot.load_extension("src.utils")

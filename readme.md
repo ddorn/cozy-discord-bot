@@ -1,6 +1,7 @@
 # EPFL Discord Bot
 
 Actually does not do much, except run an interpreter for the owner.
+To see an interesting bot, got to [tfjm-discord-bot](https://gitlab.com/ddorn/tfjm-discord-bot)
 
 ### Install and run
 
