@@ -92,7 +92,7 @@ class DevCog(Cog, name="Dev tools"):
         name="reload", aliases=["r"], usage=f"[{'|'.join(COGS_SHORTCUTS.values())}]"
     )
     @is_owner()
-    async def reload_cmd(self, ctx, name=None):
+    async def reload_cmd(self, ctx, *names):
         """
         (dev) Recharge une catégorie de commandes.
 
@@ -100,24 +100,25 @@ class DevCog(Cog, name="Dev tools"):
         possibles: `epfl`, `misc`, `dev`.
         """
 
-        if name is None:
+        if not names:
             self.bot.reload()
             await ctx.send(":tada: The bot was reloaded !")
             return
 
-        name = self.full_cog_name(name)
+        for name in names:
+            name = self.full_cog_name(name)
 
-        if name == "src.cogs.dev":
-            self.power_warn_on = False  # Shut it down
-
-        try:
-            self.bot.reload_extension(name)
-        except ExtensionNotLoaded:
-            await ctx.invoke(self.load_cmd, name)
-            return
-        except:
-            await ctx.message.add_reaction(Emoji.CROSS)
-            raise
+            if name == "src.cogs.dev":
+                self.power_warn_on = False  # Shut it down
+    
+            try:
+                self.bot.reload_extension(name)
+            except ExtensionNotLoaded:
+                await ctx.invoke(self.load_cmd, name)
+                return
+            except:
+                await ctx.message.add_reaction(Emoji.CROSS)
+                raise
         else:
             await ctx.message.add_reaction(Emoji.CHECK)
 
@@ -139,78 +140,6 @@ class DevCog(Cog, name="Dev tools"):
         else:
             await ctx.message.add_reaction(Emoji.CHECK)
 
-    # noinspection PyUnreachableCode
-    @command(name="setup")
-    @is_owner()
-    async def setup_roles(self, ctx: Context, *teams: discord.Role):
-        """
-        (dev) Commande temporaire pour setup le serveur.
-        """
-        return
-        finalist = get(ctx.guild.roles, name=Role.FINALISTE)
-        assert finalist
-
-        for t in teams:
-            m: discord.Member
-            for m in t.members:
-                await m.add_roles(finalist)
-
-        await ctx.send(
-            f"{french_join(t.mention for t in teams)} ont été ajouté en finale !"
-        )
-
-        return
-        guild: discord.Guild = ctx.guild
-        nothing = PermissionOverwrite(read_messages=False)
-        see = PermissionOverwrite(read_messages=True)
-        # orga = get(guild.roles, name=f"Orga {t}")
-
-        for t in TOURNOIS[3:]:
-            jury = get(guild.roles, name=f"Jury {t}")
-            for p in "AB":
-                await guild.create_voice_channel(
-                    f"blabla-jury-poule-{p}",
-                    overwrites={guild.default_role: nothing, jury: see},
-                    category=get(guild.categories, name=t),
-                )
-
-        return
-
-        aide: TextChannel = get(guild.text_channels, name="aide")
-        for t in TOURNOIS:
-            await aide.set_permissions(orga, overwrite=see)
-            await aide.set_permissions(jury, overwrite=see)
-
-        return
-
-        tournois = {
-            tournoi: get(guild.categories, name=tournoi) for tournoi in TOURNOIS
-        }
-
-        for ch in guild.text_channels:
-            print(repr(ch.category))
-
-        for tournoi, cat in tournois.items():
-            if tournoi == "Lyon":
-                continue
-
-            jury_channel: TextChannel = get(
-                guild.text_channels, category=cat, name="cro"
-            )
-            await jury_channel.delete()
-            # jury = get(guild.roles, name=f"Jury {tournoi}")
-            orga = get(guild.roles, name=f"Orga {tournoi}")
-            ov = {
-                guild.default_role: nothing,
-                # jury: see,
-                orga: see,
-            }
-            await guild.create_text_channel(
-                f"cro-{tournoi}", category=cat, overwrites=ov
-            )
-
-            await ctx.send(str(jury_channel))
-
     @command(name="send")
     @is_owner()
     async def send_cmd(self, ctx, *msg):
@@ -223,11 +152,20 @@ class DevCog(Cog, name="Dev tools"):
     async def del_range_cmd(self, ctx: Context, id1: Message, id2: Message):
         """
         (modo) Supprime les messages entre les deux IDs en argument.
+
+        Pour optenir les IDs des messages il faut activer le mode developpeur
+        puis clic droit > copier l'ID.
+
+        `id1` est le message le plus récent à supprimer.
+        `id2` est le message le plus ancien.
+
+        Il est impossible de supprimer plus de 100 messages d'un coup.
         """
+
         channel: TextChannel = id1.channel
         to_delete = [
-            message async for message in channel.history(before=id1, after=id2)
-        ] + [id1, id2]
+                        message async for message in channel.history(before=id1, after=id2)
+                    ] + [id1, id2]
         await channel.delete_messages(to_delete)
         await ctx.message.delete()
 
@@ -247,9 +185,9 @@ class DevCog(Cog, name="Dev tools"):
         if any(word in query for word in ("=", "return", "await", ":", "\n")):
             lines = query.splitlines()
             if (
-                "return" not in lines[-1]
-                and "=" not in lines[-1]
-                and not lines[-1].startswith(" ")
+                    "return" not in lines[-1]
+                    and "=" not in lines[-1]
+                    and not lines[-1].startswith(" ")
             ):
                 lines[-1] = f"return {lines[-1]}"
                 query = "\n".join(lines)
@@ -302,7 +240,6 @@ class DevCog(Cog, name="Dev tools"):
         embed.set_footer(text="You may edit your message.")
         return embed
 
-
     @command(name="eval", aliases=["e"])
     @is_owner()
     async def eval_cmd(self, ctx: Context):
@@ -347,6 +284,8 @@ CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
     @is_owner()
     @send_all
     async def warn_power_cmd(self, ctx: Context):
+        """Warn the owner when the server is unplugged."""
+
         self.power_warn_on = not self.power_warn_on
 
         await ctx.message.add_reaction(Emoji.CHECK)
@@ -369,6 +308,7 @@ CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
                     yield f":warning: {ctx.author.mention} Le serveur est sur batterie ! :warning:"
 
         yield "I stopped checking the power supply."
+
 
 def setup(bot: CustomBot):
     bot.add_cog(DevCog(bot))
