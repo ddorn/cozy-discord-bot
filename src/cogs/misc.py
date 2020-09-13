@@ -29,7 +29,7 @@ from discord.utils import get
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import has_role, send_and_bin, start_time, with_max_len
+from src.utils import has_role, send_and_bin, start_time, with_max_len, section
 
 # supported operators
 OPS = {
@@ -74,15 +74,13 @@ class MiscCog(Cog, name="Divers"):
         """(modo) Affiche des informations à propos du serveur."""
         guild: Guild = ctx.guild
         embed = discord.Embed(title="État du serveur", color=EMBED_COLOR)
-        benevoles = [g for g in guild.members if has_role(g, Role.BENEVOLE)]
-        participants = [g for g in guild.members if has_role(g, Role.PARTICIPANT)]
+        in_sections = [g for g in guild.members if section(g) is not None]
         no_role = [g for g in guild.members if g.top_role == guild.default_role]
         uptime = datetime.timedelta(seconds=round(time() - start_time()))
         text = len(guild.text_channels)
         vocal = len(guild.voice_channels)
         infos = {
-            "Bénévoles": len(benevoles),
-            "Participants": len(participants),
+            "Etudiants": len(in_sections),
             "Sans rôle": len(no_role),
             "Total": len(guild.members),
             "Salons texte": text,

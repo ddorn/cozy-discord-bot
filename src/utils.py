@@ -2,7 +2,7 @@ import asyncio
 from pprint import pprint
 from functools import wraps
 from io import StringIO, BytesIO
-from typing import Union
+from typing import Union, Optional
 
 import discord
 import psutil
@@ -113,6 +113,16 @@ def with_max_len(string: Union[str, StringIO], maxi=1000) -> str:
         string = string[:maxi // 2 - 3] + "\n...\n" + string[-maxi // 2 + 3:]
 
     return string
+
+
+def section(m: discord.Member) -> Optional[str]:
+    """Get the section sigle for a member."""
+
+    for s in SECTIONS:
+        for r in m.roles:
+            if r.name.startswith(s):
+                return s
+    return None
 
 
 def start_time():
