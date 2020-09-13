@@ -39,6 +39,10 @@ RE_QUERY = re.compile(
     r"^" + PREFIX + " ?e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$", re.DOTALL
 )
 
+def py(txt):
+    """Suround a text in a python code block for discord formatting"""
+    return f"```py\n{txt}```"
+
 
 class DevCog(Cog, name="Dev tools"):
     def __init__(self, bot: CustomBot):
@@ -94,10 +98,14 @@ class DevCog(Cog, name="Dev tools"):
     @is_owner()
     async def reload_cmd(self, ctx, *names):
         """
-        (dev) Recharge une catégorie de commandes.
+        (dev) Recharge une ou plusieurs extensions.
+
+        Ne pas passer d'argument recharge le bot lui même
+        mais sans toucher aux extensions (magie noire).
 
         A utiliser quand le code change. Arguments
-        possibles: `epfl`, `misc`, `dev`.
+        possibles: noms des modules python ou juste
+        le nom des cogs. Certaines abbréviations existent.
         """
 
         if not names:
@@ -110,7 +118,7 @@ class DevCog(Cog, name="Dev tools"):
 
             if name == "src.cogs.dev":
                 self.power_warn_on = False  # Shut it down
-    
+
             try:
                 self.bot.reload_extension(name)
             except ExtensionNotLoaded:
@@ -170,11 +178,13 @@ class DevCog(Cog, name="Dev tools"):
         await ctx.message.delete()
 
     async def eval(self, msg: Message) -> discord.Embed:
+        # Variables for ease of access in eval
         guild: discord.Guild = msg.guild
-        roles = guild.roles
-        members = guild.members
         channel: TextChannel = msg.channel
-        categories = guild.categories
+        if guild:
+            roles = guild.roles
+            members = guild.members
+            categories = guild.categories
         send = lambda text: asyncio.create_task(channel.send(text))
 
         query = re.match(RE_QUERY, msg.content).group("query")
@@ -217,25 +227,25 @@ class DevCog(Cog, name="Dev tools"):
 
             embed = discord.Embed(title=str(e), color=discord.Colour.red())
             embed.add_field(
-                name="Query", value=f"```py\n{with_max_len(full_query)}\n```", inline=False
+                name="Query", value=py(with_max_len(full_query)), inline=False
             )
             embed.add_field(
-                name="Traceback", value=f"```py\n{with_max_len(tb)}", inline=False
+                name="Traceback", value=py(with_max_len(tb)), inline=False
             )
         else:
             out = StringIO()
             pprint(resp, out)
 
             embed = discord.Embed(title="Result", color=discord.Colour.green())
-            embed.add_field(name="Query", value=f"```py\n{with_max_len(query)}```", inline=False)
+            embed.add_field(name="Query", value=py(with_max_len(query)), inline=False)
 
-            value = f"```py\n{with_max_len(out)}"
+            value = with_max_len(out)
             if resp is not None and value:
-                embed.add_field(name="Value", value=value, inline=False)
+                embed.add_field(name="Value", value=py(value), inline=False)
 
-        stdout = f"```py\n{with_max_len(stdout)}```"
+        stdout = with_max_len(stdout)
         if stdout:
-            embed.add_field(name="Standard output", value=stdout, inline=False)
+            embed.add_field(name="Standard output", value=py(stdout), inline=False)
 
         embed.set_footer(text="You may edit your message.")
         return embed

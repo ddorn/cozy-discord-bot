@@ -110,9 +110,10 @@ def with_max_len(string: Union[str, StringIO], maxi=1000) -> str:
         string = string.read()
 
     if len(string) > maxi:
-        string = string[:maxi//2-3] + "\n...\n" + string[-maxi//2+3:]
+        string = string[:maxi // 2 - 3] + "\n...\n" + string[-maxi // 2 + 3:]
 
     return string
+
 
 def start_time():
     return psutil.Process().create_time()

@@ -139,6 +139,7 @@ class MiscCog(Cog, name="Divers"):
 
         await msg.edit(content=f"Pong ! Ça a pris {int(1000 * (delta))}ms")
 
+    # ---------------- Calc ----------------- #
 
     @command(name="calc", aliases=["="])
     async def calc_cmd(self, ctx, *args):
