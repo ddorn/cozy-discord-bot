@@ -23,14 +23,14 @@ from ptpython.repl import embed
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import fg, french_join, send_all, with_max_len
+from src.utils import fg, french_join, send_all, with_max_len, pprint_send
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
-    "d": "dev",
     "e": "epfl",
     "m": "misc",
     "r": "errors",
+    "re": "remind",
     "u": "src.utils",
     "v": "dev",
 }

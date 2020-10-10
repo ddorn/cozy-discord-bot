@@ -81,7 +81,9 @@ class Emoji:
 
 class File:
     TOP_LEVEL = Path(__file__).parent.parent
+    DATA = TOP_LEVEL / "data"
     HUGS = TOP_LEVEL / "data" / "hugs"
+    REMINDERS = DATA / "reminders"
 
 
 def setup(_):

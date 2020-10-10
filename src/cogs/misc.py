@@ -114,6 +114,7 @@ class MiscCog(Cog, name="Divers"):
                     FRACTAL_URL.format(seed=urllib.parse.quote(seed)), timeout=120
                 ) as resp:
                     if resp.status != 200:
+                        print(resp)
                         return await ctx.send(
                             "Il y a un problème pour calculer/télécharger l'image..."
                         )
