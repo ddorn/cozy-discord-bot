@@ -98,7 +98,7 @@ class MiscCog(Cog, name="Divers"):
 
     @command(hidden=True)
     async def fractal(self, ctx: Context):
-
+        """Dessine une fractale aléatoire."""
         if self.computing:
             return await ctx.send("Il y a déjà une fractale en cours de calcul...")
 
@@ -315,7 +315,7 @@ class MiscCog(Cog, name="Divers"):
         embed = discord.Embed(
             title=f"Aide pour le groupe de commandes `!{group.qualified_name}`",
             description=group.help,
-            color=0xFFA500,
+            color=EMBED_COLOR,
         )
 
         comms = await self.filter_commands(ctx, group.commands, sort=True)

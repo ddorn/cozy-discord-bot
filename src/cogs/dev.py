@@ -29,6 +29,7 @@ COGS_SHORTCUTS = {
     "c": "src.constants",
     "e": "epfl",
     "m": "misc",
+    "p": "perms",
     "r": "errors",
     "re": "remind",
     "u": "src.utils",

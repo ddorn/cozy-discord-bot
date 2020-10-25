@@ -12,9 +12,9 @@ __all__ = [
     "FRACTAL_COOLDOWN",
     "File",
     "Emoji",
-    "FAN_CLUBS",
     "PREFIX",
     "SECTIONS",
+    "DEV_BOT_CHANNEL"
 ]
 
 DISCORD_TOKEN = os.environ.get("EPFL_DISCORD_TOKEN")
@@ -24,19 +24,20 @@ if DISCORD_TOKEN is None:
     print("You need to set the EPFL_DISCORD_TOKEN variable in your environement")
     print("Or just run:")
     print()
-    print(f'    EPFL_DISCORD_TOKEN="your token here" python epfl-discord-bot.py')
+    print(f'    EPFL_DISCORD_TOKEN="your token here" python bot.py')
     print()
     quit(1)
 
-GUILD = "690934836696973404"
 OWNER = 430566197868625920  # Diego's id
-
 BOT = 753577454341455882
+
+EPFL_GUILD = 721376511734710383  # Official EPFL guild id
+DEV_BOT_CHANNEL = 753584773661982770
+
 PREFIX = "!"
 EMBED_COLOR = 0xFF0000
-FRACTAL_URL = "https://thefractal.space/img/{seed}.png?size=1000"
+FRACTAL_URL = "https://thefractal.space/img/{seed}.png?size=640"
 FRACTAL_COOLDOWN = 42  # seconds
-FAN_CLUBS = []
 
 SECTIONS = {
     "CGC": "Chemistry and chemical engineering",
@@ -59,11 +60,6 @@ SECTIONS = {
 class Role:
     ADMIN = "Admin"
     MODO = "Modo"
-    DEV = "dev"
-    MODOS = tuple(f"Modo {t}" for t in SECTIONS)
-    PRETRESSE_CALINS = "Grande prêtresse des câlins"
-    JURY = "Eded"
-    PARTICIPANT = "EDED"
 
 
 class Emoji:
@@ -76,7 +72,6 @@ class Emoji:
     CROSS = "❌"
     PLUS_1 = "👍"
     MINUS_1 = "👎"
-    RAINBOW_HEART = "<:rainbow_heart:714172834632564818>"
 
 
 class File:
@@ -84,6 +79,7 @@ class File:
     DATA = TOP_LEVEL / "data"
     HUGS = TOP_LEVEL / "data" / "hugs"
     REMINDERS = DATA / "reminders"
+    RULES = DATA / "rules.yaml"
 
 
 def setup(_):

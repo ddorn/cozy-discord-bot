@@ -99,7 +99,7 @@ class RemindCog(Cog, name="Reminders"):
         if toggle ^ (not a.permissions_in(ctx.channel).mention_everyone):
             # Escape only @everyone/@here
             what = re.sub(r'@(everyone|here|[!&]?%d})' % ctx.guild.default_role.id, '@\u200b\\1', what)
-            # escape roles mentions if not mentionnable
+            # escape roles mentions if not mentionable
             for match in re.finditer(r"<@&([0-9]{17,21})>", what):
                 mention_id = int(match.group(1))
                 r: discord.Role = get(ctx.guild.roles, id=mention_id)

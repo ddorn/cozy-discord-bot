@@ -18,6 +18,7 @@ def start():
     bot.load_extension("src.cogs.epfl")
     bot.load_extension("src.cogs.errors")
     bot.load_extension("src.cogs.misc")
+    bot.load_extension("src.cogs.remind")
     bot.load_extension("src.utils")
 
     bot.run(DISCORD_TOKEN)

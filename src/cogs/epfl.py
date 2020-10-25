@@ -34,7 +34,13 @@ class EpflCog(Cog, name="Epfl stuff"):
     @command(name="campus-day", aliases=["cd"])
     @send_all
     async def campus_day_cmd(self, ctx: Context, day: int=None, month: int=None):
-        """Quel groupe est en présentiel ?"""
+        """
+        Quel groupe est en présentiel ?
+
+        **Exemple**:
+        !campus-day 30 09
+        !cd 24 12
+        """
         first_day = date(2020, 9, 14)
         goal = date.today()
 

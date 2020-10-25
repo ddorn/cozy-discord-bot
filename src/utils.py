@@ -71,8 +71,8 @@ async def pprint_send(ctx, *objs, **nobjs):
     return await ctx.send(embed=embed)
 
 
-async def confirm(ctx, bot, prompt):
-    msg: discord.Message = await ctx.send(prompt)
+async def confirm(ctx, bot, prompt="", **kwargs):
+    msg: discord.Message = await ctx.send(prompt, **kwargs)
     await msg.add_reaction(Emoji.CHECK)
     await msg.add_reaction(Emoji.CROSS)
 
@@ -92,6 +92,19 @@ async def confirm(ctx, bot, prompt):
         await msg.clear_reaction(Emoji.CHECK)
         return False
 
+
+def myembed(title, descr, **fields):
+    embed = discord.Embed(
+        color=EMBED_COLOR,
+        title=title,
+        description=descr,
+    )
+
+    if fields:
+        for name, value in fields.items():
+            embed.add_field(name=name, value=value)
+
+    return embed
 
 def send_all(f):
     """Decorator that send each text message that a command in a cog yields."""
