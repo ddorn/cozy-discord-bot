@@ -20,7 +20,8 @@ from typing import List, Set, Union
 import aiohttp
 import discord
 import yaml
-from discord import Guild, Member
+from discord import Guild, Member, Permissions
+from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import (BadArgument, Cog, command, Command, CommandError, Context, Group, group, is_owner,
                                   MemberConverter, RoleConverter)
@@ -95,6 +96,33 @@ class MiscCog(Cog, name="Divers"):
         embed.add_field(name="Stats", value=txt)
 
         await ctx.send(embed=embed)
+
+    @commands.has_role(Role.MODO)
+    @command(name="temp-hide", aliases=["th"])
+    async def temp_hide_cmd(self, ctx: Context):
+        """Hide the channel to everyone until next message (to prevent pings)."""
+
+        chan: GuildChannel = ctx.channel
+        if isinstance(chan, GuildChannel):
+            # synced = chan.permissions_synced
+            perms = chan.overwrites
+
+            if len(perms) > 20:
+                raise EpflError("Cannot hide a channel with more than 20 permissions.")
+
+            await chan.set_permissions(ctx.guild.default_role, read_messages=False)
+            for p in perms:
+                if p != ctx.guild.default_role:
+                    await chan.set_permissions(p, overwrite=None)
+            await chan.set_permissions(ctx.author, read_messages=True)
+
+            await self.bot.wait_for_bin(ctx.author, ctx.message, timeout=60)
+
+            await chan.set_permissions(ctx.author, overwrite=None)
+            for p, perm in perms.items():
+                await chan.set_permissions(p, overwrite=perm)
+
+
 
     @command(hidden=True)
     async def fractal(self, ctx: Context):
