@@ -1,6 +1,7 @@
 import ast
 import re
 from collections import defaultdict
+from random import shuffle
 from typing import Set, Dict, Optional, Iterator, Tuple
 
 import discord
@@ -40,9 +41,9 @@ class Rule:
             return node.n in roles
         elif isinstance(node, ast.BoolOp):  # <left> <operator> <right>
             if isinstance(node.op, ast.And):
-                return self._eval(roles, node.values[0]) and self._eval(roles, node.values[1])
+                return all(self._eval(roles, v) for v in node.values)
             elif isinstance(node.op, ast.Or):
-                return self._eval(roles, node.values[0]) or self._eval(roles, node.values[1])
+                return any(self._eval(roles, v) for v in node.values)
         elif isinstance(node, ast.Compare):
             pass
         elif isinstance(node, ast.UnaryOp):
@@ -86,6 +87,14 @@ class RuleSet(dict):
             if role is not None:
                 yield role, rule
 
+    def channels(self, guild: Guild) -> Iterator[Tuple[GuildChannel, Rule]]:
+        """Iterate over the pairs (GuildChannel, Rule) in a given guild."""
+        for item, rule in self.items():
+
+            chan = guild.get_channel(item)
+            if chan is not None:
+                yield chan, rule
+
     @classmethod
     def load(cls):
         rules = yaml.load(File.RULES.read_text())
@@ -128,10 +137,6 @@ class PermsCog(Cog, name="Permissions"):
             # We only care about role changes
             return
 
-        print(after)
-        print(bef)
-        print(now)
-
         # Check what the rules are supposed to give
         role_need = {role for role, rule in self.rules.roles(after.guild) if rule.eval(after)}
         # Find what rules were giving before
@@ -150,7 +155,7 @@ class PermsCog(Cog, name="Permissions"):
         # more than twice for the same member
         s = lambda x: french_join(r.mention for r in x) or "None"
         await self.bot.get_channel(DEV_BOT_CHANNEL).send(embed=myembed(
-            f"Role race of level {self.modifying[after.id]}" if self.modifying[after.id] else "No race (yet)",
+            f"Role race of level {self.modifying[after.id]}" if self.modifying[after.id] else "Automatic role update log",
             after.mention,
             Before=s(bef),
             After=s(now),
@@ -232,8 +237,7 @@ class PermsCog(Cog, name="Permissions"):
         """
         Update all members when we modify a Role rule but ask for confirmation first.
 
-        It is supposed that rule is in self.rules.
-        If rule is None, it deletes the current one.
+        If rule is None, it deletes the current one corresponding to role.
 
         This method mddifies self.rules.
         """
@@ -244,13 +248,21 @@ class PermsCog(Cog, name="Permissions"):
         to_remove = have_role - need_role
         to_add = need_role - have_role
 
+        ex_add = french_join(m.mention for m in list(to_add)[:4])
+        ex_rem = french_join(m.mention for m in list(to_remove)[:4])
+
+        total = len(to_add) + len(to_remove)
         embed = myembed(
             "Automatic role confirmation",
-            "Please make sure this is what you want.",
+            f"Please make sure this is what you want. It will take about {total // 5 * 5} sec.",
             Role=role.mention,
             Rule=rule.with_mentions() if rule is not None else "Deleting",
             Added=len(to_add),
             Removed=len(to_remove),
+            **{
+                "Example added": ex_add,
+                "Example removed": ex_rem,
+            }
         )
         if not await confirm(ctx, self.bot, embed=embed):
             return
@@ -271,25 +283,31 @@ class PermsCog(Cog, name="Permissions"):
 
     @has_role(Role.MODO)
     @perms.command("show")
-    async def perms_show_cmd(self, ctx: Context, raw: bool = False):
+    async def perms_show_cmd(self, ctx: Context):
         """(modo) Affiche les permissions automatiques."""
-
-        descr = "Voici la liste des permissions que le bot synchronise sur ce serveur. \n"
-
-        for item, rule in self.rules.items():
-            obj = self.get_role_or_channel(item, ctx.guild)
-            if not obj: continue
-
-            if raw:
-                descr += f"{obj.mention} ({item}): \n{rule.with_mentions()}\n {rule}\n\n"
-            else:
-                descr += f"{obj.mention}: {rule.with_mentions()}\n"
 
         embed = discord.Embed(
             colour=EMBED_COLOR,
             title="Automatic permissions",
-            description=descr,
+            description="Voici la liste des roles et permissions de salon que "
+                        "le bot synchronise sur ce serveur. Cette liste peut"
+                        "être modifiée avec `!perm set` et `!perm del`."
         )
+
+        # Okay, c'est un peu du code dupliqué... Mais pas tant que ça non plus
+        # Si tu critiques, je veux bien une plus jolie façon de faire ça.
+        fields = ""
+        for role, rule in self.rules.roles(ctx.guild):
+            fields += f"{role.mention}: {rule.with_mentions()}\n"
+        if fields:
+            embed.add_field(name="Roles", value=fields)
+
+        fields = ""
+        for chan, rule in self.rules.channels(ctx.guild):
+            fields += f"{chan.mention}: {rule.with_mentions()}\n"
+        if fields:
+            embed.add_field(name="Salons", value=fields)
+
         await ctx.send(embed=embed)
 
     @has_role(Role.MODO)

@@ -102,7 +102,9 @@ def myembed(title, descr="", **fields):
 
     if fields:
         for name, value in fields.items():
-            embed.add_field(name=name, value=value)
+            value = str(value)
+            if value:
+                embed.add_field(name=name, value=value)
 
     return embed
 
