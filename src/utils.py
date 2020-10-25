@@ -24,7 +24,7 @@ def french_join(l):
         return ""
     if len(l) == 1:
         return l[0]
-    start = ", ".join(l[:-1])
+    start = ", ".join(str(i) for i in l[:-1])
     return f"{start} et {l[-1]}"
 
 
@@ -93,7 +93,7 @@ async def confirm(ctx, bot, prompt="", **kwargs):
         return False
 
 
-def myembed(title, descr, **fields):
+def myembed(title, descr="", **fields):
     embed = discord.Embed(
         color=EMBED_COLOR,
         title=title,

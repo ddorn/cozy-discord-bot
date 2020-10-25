@@ -1,6 +1,7 @@
 import ast
 import re
-from typing import Set, Dict, Optional
+from collections import defaultdict
+from typing import Set, Dict, Optional, Iterator, Tuple
 
 import discord
 import yaml
@@ -77,6 +78,14 @@ class RuleSet(dict):
         super(RuleSet, self).__setitem__(key, value)
         self.save()
 
+    def roles(self, guild: Guild) -> Iterator[Tuple[discord.Role, Rule]]:
+        """Iterate over the pairs (Role, Rule) in a given guild."""
+        for item, rule in self.items():
+
+            role = guild.get_role(item)
+            if role is not None:
+                yield role, rule
+
     @classmethod
     def load(cls):
         rules = yaml.load(File.RULES.read_text())
@@ -105,29 +114,62 @@ class PermsCog(Cog, name="Permissions"):
     def __init__(self, bot: CustomBot):
         self.bot = bot
         self.rules = RuleSet.load()
+        self.modifying = defaultdict(int)
 
     @Cog.listener()
     async def on_member_update(self, before: Member, after: Member):
         """This is the main listener where roles and permissions are updated."""
 
         bef = set(before.roles)
-        aft = set(after.roles)
-        diff = bef.symmetric_difference(aft)
+        now = set(after.roles)
+        diff = bef.symmetric_difference(now)
 
-        if diff:
-            r = french_join(f"`{r.name}`" for r in bef - aft)
-            a = french_join(f"`{r.name}`" for r in aft - bef)
+        if not diff:
+            # We only care about role changes
+            return
 
-            m = f"{after}"
-            if r:
-                m += " a perdu " + r
-            if r and a:
-                m += " et"
-            if a:
-                m += " a gagné " + a
-            m += "."
+        print(after)
+        print(bef)
+        print(now)
 
-            await self.bot.get_channel(DEV_BOT_CHANNEL).send(m)
+        # Check what the rules are supposed to give
+        role_need = {role for role, rule in self.rules.roles(after.guild) if rule.eval(after)}
+        # Find what rules were giving before
+        # This is better than checking which roles one has,
+        # as roles manually assigned (when the rule would not)
+        # are not removed
+        role_have = {role for role, rule in self.rules.roles(after.guild) if rule.eval(before)}
+
+        add = role_need - role_have
+        rem = (role_have - role_need) & now  # Remove only roles it has
+
+        if not add and not rem:
+            return  # Nothing to do !
+
+        # Logging what happens. We are in trouble, maybe if we reach this point
+        # more than twice for the same member
+        s = lambda x: french_join(r.mention for r in x) or "None"
+        await self.bot.get_channel(DEV_BOT_CHANNEL).send(embed=myembed(
+            f"Role race of level {self.modifying[after.id]}" if self.modifying[after.id] else "No race (yet)",
+            after.mention,
+            Before=s(bef),
+            After=s(now),
+            Diff=s(diff),
+            Add=s(add),
+            Rem=s(rem),
+        ))
+
+        self.modifying[after.id] += 1
+        if self.modifying[after.id] > 1:
+            # Abort if two calls try to modify roles.
+            return
+
+        # Change roles (one by one)
+        if add:
+            await after.add_roles(*add)
+        if rem:
+            await after.remove_roles(*rem)
+        del self.modifying[after.id]
 
     def input_chan_or_role(self, val):
         """
@@ -153,7 +195,11 @@ class PermsCog(Cog, name="Permissions"):
     @has_role(Role.MODO)
     @perms.command("set")
     async def perms_set_cmd(self, ctx: Context, channel_or_role, *, rule: Rule):
-        """(modo) Definit les permissions automatiques pour un salon ou un role."""
+        """
+        (modo) Setup des roles ou permissions automatiques.
+
+        TODO: write doc.
+        """
 
         # Parse input
         channel_or_role = self.input_chan_or_role(channel_or_role)
@@ -258,8 +304,10 @@ class PermsCog(Cog, name="Permissions"):
         obj = self.get_role_or_channel(item, ctx.guild)
         if isinstance(obj, discord.Role):
             await self.change_auto_role(ctx, obj, None)
+        else:
+            await self.change_auto_channel(ctx, obj, None)
 
-        await ctx.message.add_reaction(Emoji.CHECK)
+        await ctx.send("Done !")
 
 
 def setup(bot: CustomBot):
