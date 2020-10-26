@@ -2,6 +2,7 @@ import asyncio
 from pprint import pprint
 from functools import wraps
 from io import StringIO, BytesIO
+from time import time
 from typing import Union, Optional
 
 import discord
@@ -91,6 +92,27 @@ async def confirm(ctx, bot, prompt="", **kwargs):
     else:
         await msg.clear_reaction(Emoji.CHECK)
         return False
+
+
+async def report_progress(it, ctx, descr="Progress", mini=50, step=10):
+    l = list(it)
+    if len(l) < mini:
+        for x in l:
+            yield x
+    else:
+        msg = await ctx.send(f"{descr}: NaN/{len(l)}")
+        start = time()
+        for i, x in enumerate(l):
+            yield x
+
+            if i > 0 and i % step == 0:
+                now = time()
+                elapsed = round(now - start, 2)
+                remain = round((now - start) / i * len(l), 2)
+                await msg.edit(
+                    f"{descr}: {i}/{len(l)}, elapsed {elapsed}s, remaining {remain}s."
+                )
+
 
 
 def myembed(title, descr="", **fields):

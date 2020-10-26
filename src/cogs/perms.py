@@ -11,9 +11,10 @@ from discord.abc import GuildChannel
 from discord.ext.commands import (Cog, Context, group, has_role)
 
 from src.constants import *
+from src.constants import LOG_CHANNEL
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import confirm, french_join, myembed
+from src.utils import confirm, french_join, myembed, report_progress
 
 
 def mentions_to_id(s: str) -> str:
@@ -95,6 +96,14 @@ class RuleSet(dict):
             if chan is not None:
                 yield chan, rule
 
+    def items(self, guild: Guild=None):
+        if guild is None:
+            yield from super(RuleSet, self).items()
+        else:
+            yield from self.roles(guild)
+            yield from self.channels(guild)
+
+
     @classmethod
     def load(cls):
         rules = yaml.load(File.RULES.read_text())
@@ -133,29 +142,29 @@ class PermsCog(Cog, name="Permissions"):
         now = set(after.roles)
         diff = bef.symmetric_difference(now)
 
-        if not diff:
-            # We only care about role changes
-            return
-
         # Check what the rules are supposed to give
-        role_need = {role for role, rule in self.rules.roles(after.guild) if rule.eval(after)}
+        need = {item for item, rule in self.rules.items(after.guild) if rule.eval(after)}
         # Find what rules were giving before
         # This is better than checking which roles one has,
         # as roles manually assigned (when the rule would not)
-        # are not removed
-        role_have = {role for role, rule in self.rules.roles(after.guild) if rule.eval(before)}
+        # are not removed.
+        # We care more about having enough roles than too many.
+        have = {item for item, rule in self.rules.items(after.guild) if rule.eval(before)}
 
-        add = role_need - role_have
-        rem = (role_have - role_need) & now  # Remove only roles it has
+        add = need - have
+        rem = have - need
 
         if not add and not rem:
             return  # Nothing to do !
 
-        # Logging what happens. We are in trouble, maybe if we reach this point
+        # Logging what happens. We are in trouble (maybe) if we reach this point
         # more than twice for the same member
         s = lambda x: french_join(r.mention for r in x) or "None"
-        await self.bot.get_channel(DEV_BOT_CHANNEL).send(embed=myembed(
-            f"Role race of level {self.modifying[after.id]}" if self.modifying[after.id] else "Automatic role update log",
+        await self.bot.get_channel(LOG_CHANNEL).send(
+            "" if self.modifying[after.id] == 0 else f"<@{OWNER}>",
+            embed=myembed(
+            f"Role race of level {self.modifying[after.id]}" if self.modifying[
+                after.id] else "Automatic role update log",
             after.mention,
             Before=s(bef),
             After=s(now),
@@ -170,10 +179,22 @@ class PermsCog(Cog, name="Permissions"):
             return
 
         # Change roles (one by one)
-        if add:
-            await after.add_roles(*add)
-        if rem:
-            await after.remove_roles(*rem)
+        roles_rem = rem & now
+        roles_add = {r for r in add if isinstance(r, Role)}
+
+        if roles_add:
+            await after.add_roles(*roles_add)
+        if roles_rem:
+            await after.remove_roles(*roles_rem)
+
+        # Change channel access
+        for chan in add:
+            if isinstance(chan, GuildChannel):
+                await chan.set_permissions(after, read_messages=True)
+        for chan in rem:
+            if isinstance(chan, GuildChannel):
+                await chan.set_permissions(after, overwrite=None)
+
         del self.modifying[after.id]
 
     def input_chan_or_role(self, val):
@@ -231,8 +252,6 @@ class PermsCog(Cog, name="Permissions"):
         else:  # Channel
             await self.change_auto_channel(ctx, item, rule)
 
-        await ctx.send("Done !")
-
     async def change_auto_role(self, ctx: Context, role: discord.Role, rule: Optional[Rule]):
         """
         Update all members when we modify a Role rule but ask for confirmation first.
@@ -241,6 +260,9 @@ class PermsCog(Cog, name="Permissions"):
 
         This method mddifies self.rules.
         """
+
+        # Warning: This method is very similar to change_auto_channel
+        # A change to this one should probably be echoed to the other method..
 
         have_role = set(role.members)
         need_role = set() if rule is None else {m for m in role.guild.members if rule.eval(m)}
@@ -268,9 +290,9 @@ class PermsCog(Cog, name="Permissions"):
             return
 
         member: Member
-        for member in to_remove:
+        async for member in report_progress(to_remove, ctx, f"Removing {role.name}"):
             await member.remove_roles(role)
-        for member in to_add:
+        async for member in report_progress(to_add, ctx, f"Adding {role.name}"):
             await member.add_roles(role)
 
         if rule is None:
@@ -278,8 +300,60 @@ class PermsCog(Cog, name="Permissions"):
         else:
             self.rules[role.id] = rule
 
+        await ctx.send("Done !")
+
     async def change_auto_channel(self, ctx: Context, channel: GuildChannel, rule: Rule):
-        await ctx.send("mdr j'ai pas implémenté ça moi :joy:")
+
+        # Warning: This method is mostly copied from the change_auto_role method
+        # A change to this one should probably be echoed to the other method..
+
+        # Avoid top level OR with roles
+        if rule is not None and \
+                isinstance(rule.ast, ast.BoolOp) \
+                and isinstance(rule.ast.op, ast.Or) \
+                and any(isinstance(v, ast.Constant) for v in rule.ast.values):
+            await ctx.send("The rule contains a top level `or` with a Role, it is better "
+                           "to just allow this role directly in the channel and use rules "
+                           "for negations and conjunctions, which are impossible to do with "
+                           "the basic permission system.")
+            return
+
+        have_chan = {m for m in channel.overwrites if isinstance(m, Member)}
+        need_chan = {m for m in channel.guild.members if rule.eval(m)} if rule is not None else set()
+
+        to_remove = have_chan - need_chan
+        to_add = need_chan - have_chan
+
+        ex_add = french_join(m.mention for m in list(to_add)[:4])
+        ex_rem = french_join(m.mention for m in list(to_remove)[:4])
+
+        total = len(to_add) + len(to_remove)
+        embed = myembed(
+            "Automatic permission confirmation",
+            f"Please make sure this is what you want. It will take about {total // 5 * 5} sec.",
+            Channel=channel.mention,
+            Rule=rule.with_mentions() if rule is not None else "Deleting",
+            Added=len(to_add),
+            Removed=len(to_remove),
+            **{
+                "Example added": ex_add,
+                "Example removed": ex_rem,
+            }
+        )
+        if not await confirm(ctx, self.bot, embed=embed):
+            return
+
+        async for member in report_progress(to_remove, ctx, f"Removing from {channel.mention}"):
+            await channel.set_permissions(member, overwrite=None)
+        async for member in report_progress(to_add, ctx, f"Adding to {channel.mention}"):
+            await channel.set_permissions(member, read_messages=True)
+
+        if rule is None:
+            del self.rules[channel.id]
+        else:
+            self.rules[channel.id] = rule
+
+        await ctx.send("Done !")
 
     @has_role(Role.MODO)
     @perms.command("show")
@@ -300,13 +374,13 @@ class PermsCog(Cog, name="Permissions"):
         for role, rule in self.rules.roles(ctx.guild):
             fields += f"{role.mention}: {rule.with_mentions()}\n"
         if fields:
-            embed.add_field(name="Roles", value=fields)
+            embed.add_field(name="Roles", value=fields, inline=False)
 
         fields = ""
         for chan, rule in self.rules.channels(ctx.guild):
             fields += f"{chan.mention}: {rule.with_mentions()}\n"
         if fields:
-            embed.add_field(name="Salons", value=fields)
+            embed.add_field(name="Salons", value=fields, inline=False)
 
         await ctx.send(embed=embed)
 
@@ -325,7 +399,19 @@ class PermsCog(Cog, name="Permissions"):
         else:
             await self.change_auto_channel(ctx, obj, None)
 
-        await ctx.send("Done !")
+    @has_role(Role.MODO)
+    @perms.command("clear")
+    async def perms_clear_cmd(self, ctx, channel: int):
+        """(modo) Removes all permissions from a channel."""
+
+        chan = ctx.guild.get_channel(channel)
+        if chan is None:
+            await ctx.message.add_reaction(Emoji.CROSS)
+            return
+
+        for o in chan.overwrites:
+            await chan.set_permissions(o, overwrite=None)
+        await ctx.message.add_reaction(Emoji.CHECK)
 
 
 def setup(bot: CustomBot):

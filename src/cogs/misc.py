@@ -104,7 +104,6 @@ class MiscCog(Cog, name="Divers"):
 
         chan: GuildChannel = ctx.channel
         if isinstance(chan, GuildChannel):
-            # synced = chan.permissions_synced
             perms = chan.overwrites
 
             if len(perms) > 20:
@@ -121,8 +120,6 @@ class MiscCog(Cog, name="Divers"):
             await chan.set_permissions(ctx.author, overwrite=None)
             for p, perm in perms.items():
                 await chan.set_permissions(p, overwrite=perm)
-
-
 
     @command(hidden=True)
     async def fractal(self, ctx: Context):

@@ -14,6 +14,7 @@ __all__ = [
     "Emoji",
     "PREFIX",
     "SECTIONS",
+    "YEARS",
     "DEV_BOT_CHANNEL"
 ]
 
@@ -33,6 +34,7 @@ BOT = 753577454341455882
 
 EPFL_GUILD = 721376511734710383  # Official EPFL guild id
 DEV_BOT_CHANNEL = 753584773661982770
+LOG_CHANNEL = 770004202406674433
 
 PREFIX = "!"
 EMBED_COLOR = 0xFF0000
@@ -52,9 +54,20 @@ SECTIONS = {
     "ARCHI": "Architecture",
     "GC": "Civil engineering",
     "MT": "Microengineering",
-    # "MAN": "MAN",
     "CMS": "CMS",
 }
+
+# IDs of year roles
+YEARS = [
+    721444748484673727,
+    753679540064223293,
+    753679541108736190,
+    753679541821505656,
+    753679542442524834,
+    753679543088185526,
+    770007403730960395,
+    770007068585230336,
+]
 
 
 class Role:
