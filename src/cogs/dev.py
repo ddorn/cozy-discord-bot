@@ -23,7 +23,7 @@ from ptpython.repl import embed
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import fg, french_join, send_all, with_max_len, pprint_send
+from src.utils import fg, french_join, send_all, with_max_len, pprint_send, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -39,10 +39,6 @@ COGS_SHORTCUTS = {
 RE_QUERY = re.compile(
     r"^" + PREFIX + " ?e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$", re.DOTALL
 )
-
-def py(txt):
-    """Suround a text in a python code block for discord formatting"""
-    return f"```py\n{txt}```"
 
 
 class DevCog(Cog, name="Dev tools"):

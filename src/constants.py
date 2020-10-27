@@ -15,7 +15,8 @@ __all__ = [
     "PREFIX",
     "SECTIONS",
     "YEARS",
-    "DEV_BOT_CHANNEL"
+    "DEV_BOT_CHANNEL",
+    "LOG_CHANNEL",
 ]
 
 DISCORD_TOKEN = os.environ.get("EPFL_DISCORD_TOKEN")

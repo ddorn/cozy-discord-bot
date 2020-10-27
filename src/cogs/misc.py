@@ -3,34 +3,31 @@ import asyncio
 import datetime
 import io
 import itertools
+import math
 import operator as op
 import random
 import re
 import traceback
 import urllib
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
-from functools import partial
-import math
+from itertools import chain
 from math import factorial
-from operator import attrgetter, itemgetter
+from operator import attrgetter
 from time import time
-from typing import List, Set, Union
+from typing import List
 
 import aiohttp
 import discord
-import yaml
-from discord import Guild, Member, Permissions
+from discord import Guild, Member, TextChannel, ChannelType, GroupChannel, VoiceChannel, CategoryChannel
 from discord.abc import GuildChannel
 from discord.ext import commands
-from discord.ext.commands import (BadArgument, Cog, command, Command, CommandError, Context, Group, group, is_owner,
-                                  MemberConverter, RoleConverter)
+from discord.ext.commands import (Cog, command, Command, CommandError, Context, Group, guild_only)
 from discord.utils import get
 
+from src.cogs.perms import RuleSet
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import has_role, send_and_bin, start_time, with_max_len, section
+from src.utils import mentions_to_id, myembed, section, start_time, with_max_len, french_join
 
 # supported operators
 OPS = {
@@ -69,10 +66,47 @@ class MiscCog(Cog, name="Divers"):
         msg = await ctx.send(f"J'ai choisi... **{choice}**")
         await self.bot.wait_for_bin(ctx.author, msg),
 
-    @command(name="status")
-    @commands.has_role(Role.MODO)
-    async def status_cmd(self, ctx: Context):
-        """(modo) Affiche des informations à propos du serveur."""
+    @guild_only()
+    @command(name="info")
+    async def info_cmd(self, ctx: Context, *, what: str=None):
+        """(modo) Affiche des informations à propos du serveur ou de l'argument."""
+
+        if what is None:
+            return await self.send_server_info(ctx)
+
+        guild: Guild = ctx.guild
+        what_ = what
+        what = what.strip()
+
+        # try to convert it to an id
+        what = mentions_to_id(what)
+        try:
+            what = int(what)
+            obj = guild.get_channel(what) or guild.get_role(what) or guild.get_member(what)
+        except ValueError:
+            obj = guild.get_member_named(what) or get(guild.roles, name=what) or get(guild.channels, name=what)
+
+            # Last try: casefold comp
+            what = what.casefold()
+            for r in chain(guild.roles, guild.channels, guild.members):
+                if r.name.casefold() == what:
+                    obj = r
+                    break
+
+        if isinstance(obj, GuildChannel) and not obj.permissions_for(ctx.author).read_messages:
+            obj = None
+
+        if obj is None:
+            raise EpflError(f"Could not understand what {what_} is.")
+
+        if isinstance(obj, discord.Role):
+            return await self.send_role_info(ctx, obj)
+        elif isinstance(obj, discord.Member):
+            return await self.send_member_info(ctx, obj)
+        else:
+            return await self.send_channel_info(ctx, obj)
+
+    async def send_server_info(self, ctx):
         guild: Guild = ctx.guild
         embed = discord.Embed(title="État du serveur", color=EMBED_COLOR)
         in_sections = [g for g in guild.members if section(g) is not None]
@@ -97,6 +131,68 @@ class MiscCog(Cog, name="Divers"):
 
         await ctx.send(embed=embed)
 
+    async def send_role_info(self, ctx: Context, role: discord.Role):
+        rule = RuleSet.load().get(role.id)
+
+        age = (datetime.datetime.now() - role.created_at)
+        d = age.days
+
+        embed = myembed(
+            f"Info pour le role {role.name}",
+            "",
+            role.color,
+            Mention=role.mention,
+            ID=role.id,
+            Members=len(role.members),
+            # Creation=role.created_at.ctime(),
+            Created=f"{d} day{'s'*(d > 1)} ago",
+            Mentionable="Yes" if role.mentionable else "No",
+            Position=role.position,
+            Auto_condition=rule.with_mentions() if rule is not None else "",
+        )
+
+        await ctx.send(embed=embed)
+
+    async def send_member_info(self, ctx: Context, member: Member):
+
+        member_since = datetime.datetime.now() - member.joined_at
+
+        embed = myembed(
+            f"Info pour {member.display_name}",
+            "",
+            member.color,
+            Mention=member.mention,
+            ID=member.id,
+            Top_role=member.top_role.mention,
+            Member_for=f"{member_since.days} day{'s' * (member_since.days > 1)}",
+            Booster_since=member.premium_since,
+            _Roles=french_join(r.mention for r in reversed(member.roles[1:])),
+        )
+
+        await ctx.send(embed=embed)
+
+    async def send_channel_info(self, ctx: Context, chan: GuildChannel):
+
+        crea = datetime.datetime.now() - chan.created_at
+        rule = RuleSet.load().get(chan.id)
+        type = "la catégorie" if chan.type == ChannelType.category else "le salon"
+        access = [m for m in ctx.guild.members if chan.permissions_for(m).read_messages]
+
+        embed = myembed(
+            f"Info pour {type} {chan.name}",
+            "",
+            Link=chan.mention if isinstance(chan, TextChannel) else None,
+            ID=chan.id,
+            Have_access=f"{len(access)} members",
+            Created=f"{crea.days} day{'s'*(crea.days > 1)} ago",
+            Authorized=french_join((r.mention
+                                  for r, ov in chan.overwrites.items()
+                                  if isinstance(r, discord.Role) and ov.read_messages), "ou"),
+            Auto_condition=rule.with_mentions() if rule is not None else None,
+        )
+        await ctx.send(embed=embed)
+
+    @guild_only()
     @commands.has_role(Role.MODO)
     @command(name="temp-hide", aliases=["th"])
     async def temp_hide_cmd(self, ctx: Context):
@@ -106,14 +202,14 @@ class MiscCog(Cog, name="Divers"):
         if isinstance(chan, GuildChannel):
             perms = chan.overwrites
 
-            if len(perms) > 20:
-                raise EpflError("Cannot hide a channel with more than 20 permissions.")
+            if len(perms) > 10:
+                raise EpflError("Cannot hide a channel with more than 10 permissions.")
 
+            await chan.set_permissions(ctx.author, read_messages=True)
             await chan.set_permissions(ctx.guild.default_role, read_messages=False)
             for p in perms:
-                if p != ctx.guild.default_role:
+                if p not in (ctx.guild.default_role, ctx.author):
                     await chan.set_permissions(p, overwrite=None)
-            await chan.set_permissions(ctx.author, read_messages=True)
 
             await self.bot.wait_for_bin(ctx.author, ctx.message, timeout=60)
 

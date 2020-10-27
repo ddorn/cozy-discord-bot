@@ -1,9 +1,9 @@
-import asyncio
-from pprint import pprint
+import re
 from functools import wraps
-from io import StringIO, BytesIO
+from io import StringIO
+from pprint import pprint
 from time import time
-from typing import Union, Optional
+from typing import Optional, Union
 
 import discord
 import psutil
@@ -19,14 +19,33 @@ def fg(text, color: int = 0xFFA500):
     return f"\033[38;2;{r};{g};{b}m{text}\033[m"
 
 
-def french_join(l):
+def py(txt):
+    """
+    Suround a text in a python code block for discord formatting.
+    If there is no text, returns the empty string.
+    """
+    if not txt:
+        return ""
+    return f"```py\n{txt}```"
+
+
+def french_join(l, last_link="et"):
     l = list(l)
     if not l:
         return ""
     if len(l) == 1:
         return l[0]
     start = ", ".join(str(i) for i in l[:-1])
-    return f"{start} et {l[-1]}"
+    return f"{start} {last_link} {l[-1]}"
+
+
+def mentions_to_id(s: str) -> str:
+    """
+    Remove all mentions from a string and replace them with IDs.
+
+    Does not work with plain text mentions like @everyone and @here.
+    """
+    return re.sub(r"<[@#][&!]?([0-9]{18,21})>", r"\1", s)
 
 
 def has_role(member, role: Union[str, tuple]):
@@ -100,7 +119,7 @@ async def report_progress(it, ctx, descr="Progress", mini=50, step=10):
         for x in l:
             yield x
     else:
-        msg = await ctx.send(f"{descr}: NaN/{len(l)}")
+        msg = await ctx.send(f"{descr}: 0/{len(l)}")
         start = time()
         for i, x in enumerate(l):
             yield x
@@ -108,27 +127,37 @@ async def report_progress(it, ctx, descr="Progress", mini=50, step=10):
             if i > 0 and i % step == 0:
                 now = time()
                 elapsed = round(now - start, 2)
-                remain = round((now - start) / i * len(l), 2)
+                remain = round((now - start) / i * len(l) - elapsed, 2)
                 await msg.edit(
-                    f"{descr}: {i}/{len(l)}, elapsed {elapsed}s, remaining {remain}s."
+                    content=f"{descr}: {i}/{len(l)}, elapsed {elapsed}s, remaining {remain}s."
                 )
+        await msg.edit(
+            content=f"{descr}: {len(l)}/{len(l)}, total {round(time() - start)}sec."
+        )
 
 
+def myembed(title, descr="", color=EMBED_COLOR, **fields):
+    """
+    Create an embed in one function.
 
-def myembed(title, descr="", **fields):
+    If you prefix a field by an underscore, the field will not be inline.
+    Underscores are replaced with spaces in fields names.
+    """
+
     embed = discord.Embed(
-        color=EMBED_COLOR,
+        color=color,
         title=title,
         description=descr,
     )
 
-    if fields:
-        for name, value in fields.items():
-            value = str(value)
-            if value:
-                embed.add_field(name=name, value=value)
+    for name, value in fields.items():
+        if value not in (None, ""):
+            val = str(value)
+            view_name = name.replace("_", " ")
+            embed.add_field(name=view_name, value=val, inline=not name.startswith("_"))
 
     return embed
+
 
 def send_all(f):
     """Decorator that send each text message that a command in a cog yields."""

@@ -1,14 +1,20 @@
 import sys
 import traceback
+from datetime import datetime
+from io import StringIO
+from pprint import pprint
 
 import discord
 from discord.ext.commands import *
 from discord.utils import maybe_coroutine
 
+from src.constants import LOG_CHANNEL
 from src.core import CustomBot
-from src.errors import UnwantedCommand, EpflError
+from src.errors import EpflError
 
 # Global variable and function because I'm too lazy to make a metaclass
+from src.utils import myembed, with_max_len, py
+
 handlers = {}
 
 
@@ -34,7 +40,29 @@ class ErrorsCog(Cog):
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, error: CommandError):
-        print(repr(error), file=sys.stderr)
+        err = error if not isinstance(error, CommandInvokeError) else error.original
+
+        now = datetime.now().ctime()
+        trace = StringIO()
+        traceback.print_tb(err.__traceback__, file=trace)
+
+        print("---" * 4, file=sys.stderr)
+        print(now, file=sys.stderr)
+        print(repr(err), ctx.author, ctx.message.content, sep="\n", file=sys.stderr)
+        traceback.print_tb(err.__traceback__, file=sys.stderr)
+
+        if not isinstance(err, (CommandNotFound)):
+            # Always send a message in the log channel
+            embed = myembed(
+                f"A {err.__class__.__name__} happened",
+                repr(err),
+                _traceback=py(with_max_len(trace)),
+                time=now,
+                author=ctx.author.mention,
+                message_id=ctx.message.id,
+                _message=with_max_len(ctx.message.content),
+            )
+            await self.bot.get_channel(LOG_CHANNEL).send(embed=embed)
 
         # We take the first superclass with an handler defined
         handler = None
@@ -53,17 +81,38 @@ class ErrorsCog(Cog):
             message = await ctx.send(msg)
             await self.bot.wait_for_bin(ctx.message.author, message)
 
-    @handles(UnwantedCommand)
-    async def on_unwanted_command(self, ctx, error: UnwantedCommand):
-        await ctx.message.delete()
-        author: discord.Message
-        await ctx.author.send(
-            "J'ai supprimé ton message:\n> "
-            + ctx.message.clean_content
-            + "\nC'est pas grave, c'est juste pour ne pas encombrer "
-            "le chat lors du tirage."
+
+    async def on_error(self, event, *args, **kwargs):
+        type_, value, traceback_ = sys.exc_info()
+        now = datetime.now()
+
+        # stderr
+        print("---" * 4, file=sys.stderr)
+        print(now.ctime(), file=sys.stderr)
+        print(event, args, kwargs, sep="\n", file=sys.stderr)
+        traceback.print_tb(traceback_, file=sys.stderr)
+
+        # Also send embed
+        trace = StringIO()
+        args_io = StringIO()
+        kwargs_io = StringIO()
+
+        traceback.print_tb(traceback_, file=trace)
+        if args:  # So they don't appear if empty
+            pprint(args, args_io)
+        if kwargs:
+            pprint(kwargs, kwargs_io)
+
+        embed = myembed(
+            f"{type_.__name__} during {event} event",
+            repr(value),
+            traceback=py(with_max_len(trace)),
+            _args=py(with_max_len(args_io)),
+            _kwargs=py(with_max_len(kwargs_io)),
+            time=now.ctime(),
         )
-        await ctx.author.send("Raison: " + error.msg)
+
+        await self.bot.get_channel(LOG_CHANNEL).send(embed=embed)
 
     @handles(EpflError)
     async def on_epfl_error(self, ctx: Context, error: EpflError):
@@ -77,7 +126,6 @@ class ErrorsCog(Cog):
         if specific_handler:
             return await specific_handler(self, ctx, error.original)
 
-        traceback.print_tb(error.original.__traceback__, file=sys.stderr)
         return (
             error.original.__class__.__name__
             + ": "
@@ -99,5 +147,7 @@ class ErrorsCog(Cog):
         )
 
 
-def setup(bot):
-    bot.add_cog(ErrorsCog(bot))
+def setup(bot: CustomBot):
+    cog = ErrorsCog(bot)
+    bot.add_cog(cog)
+    bot.on_error = cog.on_error

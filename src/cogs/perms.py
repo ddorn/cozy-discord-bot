@@ -1,25 +1,23 @@
 import ast
 import re
 from collections import defaultdict
-from random import shuffle
-from typing import Set, Dict, Optional, Iterator, Tuple
+from itertools import chain
+from operator import attrgetter
+from typing import Iterator, Optional, Set, Tuple, Union
 
 import discord
 import yaml
-from discord import Member, Guild
+from discord import Guild, Member
 from discord.abc import GuildChannel
 from discord.ext.commands import (Cog, Context, group, has_role)
 
 from src.constants import *
-from src.constants import LOG_CHANNEL
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import confirm, french_join, myembed, report_progress
+from src.utils import confirm, french_join, mentions_to_id, myembed, report_progress
 
 
-def mentions_to_id(s: str) -> str:
-    return re.sub(r"<[@#][&!]?([0-9]{18,21})>", r"\1", s)
-
+RoleOrChan = Union[discord.Role, GuildChannel]
 
 class Rule:
     def __init__(self, rule: str):
@@ -67,7 +65,7 @@ class RuleSet(dict):
     A dictionnary of rules indexed py role/channel ids.
 
     It saves itself on the disk at File.RULES every time it is modified.
-    There should not be multiple instances of this class.
+    There should not be multiple instances modifying this class.
     """
 
     def __delitem__(self, key):
@@ -166,8 +164,7 @@ class PermsCog(Cog, name="Permissions"):
             f"Role race of level {self.modifying[after.id]}" if self.modifying[
                 after.id] else "Automatic role update log",
             after.mention,
-            Before=s(bef),
-            After=s(now),
+            _Before=s(sorted(bef, key=attrgetter("name"))),
             Diff=s(diff),
             Add=s(add),
             Rem=s(rem),
@@ -180,7 +177,7 @@ class PermsCog(Cog, name="Permissions"):
 
         # Change roles (one by one)
         roles_rem = rem & now
-        roles_add = {r for r in add if isinstance(r, Role)}
+        roles_add = {r for r in add if isinstance(r, discord.Role)}
 
         if roles_add:
             await after.add_roles(*roles_add)
@@ -246,26 +243,48 @@ class PermsCog(Cog, name="Permissions"):
                 f" Conflicts: {conflicts_str}"
             )
 
-        # We have different logic for roles and permissions.
-        if isinstance(item, discord.Role):
-            await self.change_auto_role(ctx, item, rule)
-        else:  # Channel
-            await self.change_auto_channel(ctx, item, rule)
+        await self.setup_auto_rule(ctx, item, rule)
 
-    async def change_auto_role(self, ctx: Context, role: discord.Role, rule: Optional[Rule]):
+    def have(self, item: RoleOrChan) -> Set[Member]:
+        """Return the set of members that have the role/channel access."""
+
+        if isinstance(item, discord.Role):
+            return set(item.members)
+        else:
+            return {m for m in item.overwrites if isinstance(m, Member)}
+
+    def need(self, item: RoleOrChan, rule: Optional[Rule]) -> Set[Member]:
+        """Return the set of member that need the role/channel access according to the rule."""
+
+        if rule is None:
+            return set()
+
+        return {m for m in item.guild.members if rule.eval(m)}
+
+    async def setup_auto_rule(self, ctx: Context, item: RoleOrChan, rule: Optional[Rule]):
         """
         Update all members when we modify a Role rule but ask for confirmation first.
 
         If rule is None, it deletes the current one corresponding to role.
-
-        This method mddifies self.rules.
+        This method modifies self.rules but does not check for cycles or conflicts.
         """
 
-        # Warning: This method is very similar to change_auto_channel
-        # A change to this one should probably be echoed to the other method..
+        is_role = isinstance(item, discord.Role)
 
-        have_role = set(role.members)
-        need_role = set() if rule is None else {m for m in role.guild.members if rule.eval(m)}
+        # for channels, avoid top level OR with roles
+        if not is_role \
+                and rule is not None \
+                and isinstance(rule.ast, ast.BoolOp) \
+                and isinstance(rule.ast.op, ast.Or) \
+                and any(isinstance(v, ast.Constant) for v in rule.ast.values):
+            await ctx.send("The rule contains a top level `or` with a Role, it is better "
+                           "to just allow this role directly in the channel and use rules "
+                           "for negations and conjunctions, which are impossible to do with "
+                           "the basic permission system.")
+            return
+
+        have_role = self.have(item)
+        need_role = self.need(item, rule)
 
         to_remove = have_role - need_role
         to_add = need_role - have_role
@@ -275,9 +294,9 @@ class PermsCog(Cog, name="Permissions"):
 
         total = len(to_add) + len(to_remove)
         embed = myembed(
-            "Automatic role confirmation",
-            f"Please make sure this is what you want. It will take about {total // 5 * 5} sec.",
-            Role=role.mention,
+            f"Automatic {'role' if is_role else 'permissions'} confirmation",
+            f"Please make sure this is what you want. It will take about {int(total // 5 * 5 * 1.5)} sec.",
+            Target=item.mention,
             Rule=rule.with_mentions() if rule is not None else "Deleting",
             Added=len(to_add),
             Removed=len(to_remove),
@@ -289,71 +308,52 @@ class PermsCog(Cog, name="Permissions"):
         if not await confirm(ctx, self.bot, embed=embed):
             return
 
-        member: Member
-        async for member in report_progress(to_remove, ctx, f"Removing {role.name}"):
-            await member.remove_roles(role)
-        async for member in report_progress(to_add, ctx, f"Adding {role.name}"):
-            await member.add_roles(role)
+        await self._set_perms(ctx, item, to_add, to_remove)
 
         if rule is None:
-            del self.rules[role.id]
+            del self.rules[item.id]
         else:
-            self.rules[role.id] = rule
+            self.rules[item.id] = rule
 
         await ctx.send("Done !")
 
-    async def change_auto_channel(self, ctx: Context, channel: GuildChannel, rule: Rule):
+    async def _set_perms(self, ctx, item: RoleOrChan, to_add, to_rem):
+        is_role = isinstance(item, discord.Role)
 
-        # Warning: This method is mostly copied from the change_auto_role method
-        # A change to this one should probably be echoed to the other method..
+        async for member in report_progress(to_rem, ctx, f"Removing {'from ' * (not is_role)}{item.name}", 1):
+            if is_role:
+                await member.remove_roles(item)
+            else:
+                await item.set_permissions(member, overwrite=None)
+        async for member in report_progress(to_add, ctx, f"Adding {'to ' * (not is_role)}{item.name}", 1):
+            if is_role:
+                await member.add_roles(item)
+            else:
+                await item.set_permissions(member, read_messages=True)
 
-        # Avoid top level OR with roles
-        if rule is not None and \
-                isinstance(rule.ast, ast.BoolOp) \
-                and isinstance(rule.ast.op, ast.Or) \
-                and any(isinstance(v, ast.Constant) for v in rule.ast.values):
-            await ctx.send("The rule contains a top level `or` with a Role, it is better "
-                           "to just allow this role directly in the channel and use rules "
-                           "for negations and conjunctions, which are impossible to do with "
-                           "the basic permission system.")
-            return
+    @has_role(Role.MODO)
+    @perms.command("fix")
+    async def perms_fix_cmd(self, ctx: Context):
+        to_add = {}
+        to_rem = {}
+        for item, rule in self.rules.roles(ctx.guild):
+            have = self.have(item)
+            need = self.need(item, rule)
+            to_rem[item] = have - need
+            to_add[item] = need - have
 
-        have_chan = {m for m in channel.overwrites if isinstance(m, Member)}
-        need_chan = {m for m in channel.guild.members if rule.eval(m)} if rule is not None else set()
-
-        to_remove = have_chan - need_chan
-        to_add = need_chan - have_chan
-
-        ex_add = french_join(m.mention for m in list(to_add)[:4])
-        ex_rem = french_join(m.mention for m in list(to_remove)[:4])
-
-        total = len(to_add) + len(to_remove)
         embed = myembed(
-            "Automatic permission confirmation",
-            f"Please make sure this is what you want. It will take about {total // 5 * 5} sec.",
-            Channel=channel.mention,
-            Rule=rule.with_mentions() if rule is not None else "Deleting",
-            Added=len(to_add),
-            Removed=len(to_remove),
-            **{
-                "Example added": ex_add,
-                "Example removed": ex_rem,
-            }
+            "Fixing automatic rules",
+            "",
+            Added=sum(map(len, to_add.values())),
+            Removed=sum(map(len, to_rem.values())),
+            Rules_fixed=french_join(i.mention for i in chain(to_rem) if to_add[i] or to_rem[i]),
         )
         if not await confirm(ctx, self.bot, embed=embed):
             return
 
-        async for member in report_progress(to_remove, ctx, f"Removing from {channel.mention}"):
-            await channel.set_permissions(member, overwrite=None)
-        async for member in report_progress(to_add, ctx, f"Adding to {channel.mention}"):
-            await channel.set_permissions(member, read_messages=True)
-
-        if rule is None:
-            del self.rules[channel.id]
-        else:
-            self.rules[channel.id] = rule
-
-        await ctx.send("Done !")
+        for item in to_rem:
+            await self._set_perms(ctx, item, to_add[item], to_rem[item])
 
     @has_role(Role.MODO)
     @perms.command("show")
@@ -395,7 +395,7 @@ class PermsCog(Cog, name="Permissions"):
 
         obj = self.get_role_or_channel(item, ctx.guild)
         if isinstance(obj, discord.Role):
-            await self.change_auto_role(ctx, obj, None)
+            await self.setup_auto_rule(ctx, obj, None)
         else:
             await self.change_auto_channel(ctx, obj, None)
 
