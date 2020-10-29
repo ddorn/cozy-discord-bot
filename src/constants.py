@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
-from time import time
 
 __all__ = [
     "DISCORD_TOKEN",
     "Role",
+    "Channels",
     "OWNER",
     "BOT",
     "EMBED_COLOR",
@@ -15,8 +15,8 @@ __all__ = [
     "PREFIX",
     "SECTIONS",
     "YEARS",
-    "DEV_BOT_CHANNEL",
-    "LOG_CHANNEL",
+    "PASSE_PARTOUT_ROLE",
+    "EPFL_GUILD",
 ]
 
 DISCORD_TOKEN = os.environ.get("EPFL_DISCORD_TOKEN")
@@ -34,8 +34,7 @@ OWNER = 430566197868625920  # Diego's id
 BOT = 753577454341455882
 
 EPFL_GUILD = 721376511734710383  # Official EPFL guild id
-DEV_BOT_CHANNEL = 753584773661982770
-LOG_CHANNEL = 770004202406674433
+PASSE_PARTOUT_ROLE = 769480338594332702
 
 PREFIX = "!"
 EMBED_COLOR = 0xFF0000
@@ -74,7 +73,14 @@ YEARS = [
 class Role:
     ADMIN = "Admin"
     MODO = "Modo"
+    ORGA = "Orga"
 
+
+class Channels:
+    CHAT_ORGA = 771143198487085077
+    DEV_BOT_CHANNEL = 753584773661982770
+    LOG_CHANNEL = 770004202406674433
+    EVENT_CATEGORY = 771423740701179914
 
 class Emoji:
     HEART = "❤️"
@@ -90,6 +96,7 @@ class Emoji:
 
 class File:
     TOP_LEVEL = Path(__file__).parent.parent
+    COGS = TOP_LEVEL / "src" / "cogs"
     DATA = TOP_LEVEL / "data"
     HUGS = TOP_LEVEL / "data" / "hugs"
     REMINDERS = DATA / "reminders"

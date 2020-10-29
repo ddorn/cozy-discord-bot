@@ -8,7 +8,7 @@ import discord
 from discord.ext.commands import *
 from discord.utils import maybe_coroutine
 
-from src.constants import LOG_CHANNEL
+from src.constants import Channels
 from src.core import CustomBot
 from src.errors import EpflError
 
@@ -119,7 +119,7 @@ class ErrorsCog(Cog):
                 message_id=ctx.message.id,
                 _message=with_max_len(ctx.message.content),
             )
-            await self.bot.get_channel(LOG_CHANNEL).send(embed=embed)
+            await self.bot.get_channel(Channels.LOG_CHANNEL).send(embed=embed)
 
         # Handling error for Users
         handler = self.get_handler(exc)
@@ -145,11 +145,11 @@ class ErrorsCog(Cog):
             args=pformat(args),
             kwargs=pformat(kwargs)
         )
-        await self.bot.get_channel(LOG_CHANNEL).send(embed=embed)
+        await self.bot.get_channel(Channels.LOG_CHANNEL).send(embed=embed)
 
     @handles(Exception)
     def on_exception(self, ctx, exc):
-        return repr(exc)
+        return str(exc)
 
     @handles(EpflError)
     def on_epfl_error(self, ctx: Context, error: EpflError):
@@ -183,6 +183,12 @@ class ErrorsCog(Cog):
         return (
             f"Il te faut le role de {error.missing_role} pour utiliser cette commande."
         )
+
+    @handles(BadArgument)
+    def on_bad_argument(self, ctx: Context, error: BadArgument):
+        self.bot.loop.create_task(ctx.invoke(self.bot.get_command("help"), ctx.command.qualified_name))
+
+        return str(error)
 
 
 def setup(bot: CustomBot):

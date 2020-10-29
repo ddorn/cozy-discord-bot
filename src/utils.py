@@ -7,7 +7,8 @@ from typing import Optional, Union
 
 import discord
 import psutil
-from discord.ext.commands import Bot
+from discord.ext import commands
+from discord.ext.commands import Bot, Context
 
 from src.constants import *
 
@@ -193,6 +194,17 @@ def section(m: discord.Member) -> Optional[str]:
 
 def start_time():
     return psutil.Process().create_time()
+
+
+def official_guild():
+    """A check tha passes only of the command is invoked in the EPFL Community guild."""
+
+    def predicate(ctx: Context):
+        if ctx.guild is None:
+            return False
+        return ctx.guild.id == EPFL_GUILD
+
+    return commands.check(predicate)
 
 
 def setup(bot: Bot):

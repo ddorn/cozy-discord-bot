@@ -9,18 +9,14 @@ def start():
     # It must be in first otherwise "!" always match first and the space is not recognised
     bot = CustomBot((PREFIX + " ", PREFIX), case_insensitive=True, owner_id=OWNER)
 
-    @bot.event
-    async def on_ready():
-        print(f"{bot.user} has connected to Discord!")
-
+    # We have our own help command, so remove the existing one before loading it
     bot.remove_command("help")
-    bot.load_extension("src.cogs.dev")
-    bot.load_extension("src.cogs.epfl")
-    bot.load_extension("src.cogs.errors")
-    bot.load_extension("src.cogs.misc")
-    bot.load_extension("src.cogs.remind")
-    bot.load_extension("src.utils")
 
+    # Load all cogs in File.COGS
+    for cog in File.COGS.glob("[^_]*.py"):
+        bot.load_extension(cog.relative_to(File.TOP_LEVEL).as_posix().replace("/", ".")[:-3])
+
+    # Let's goooo
     bot.run(DISCORD_TOKEN)
 
 

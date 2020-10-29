@@ -9,7 +9,7 @@ __all__ = ["CustomBot"]
 
 from discord.utils import get
 
-from src.constants import Emoji
+from src.constants import *
 
 
 class CustomBot(Bot):
@@ -19,6 +19,11 @@ class CustomBot(Bot):
     for the type checker about the modules
     that are added by extensions.
     """
+
+    async def on_ready(self):
+        print("Connected to discord !")
+
+        await self.get_channel(Channels.LOG_CHANNEL).send("Here I am !")
 
     def __str__(self):
         return f"{self.__class__.__name__}:{hex(id(self.__class__))} obj at {hex(id(self))}"
@@ -76,3 +81,5 @@ class CustomBot(Bot):
             except (NotFound, Forbidden):
                 # Message or reaction deleted / in dm channel
                 pass
+
+
