@@ -2,7 +2,7 @@ import sys
 import traceback
 from datetime import datetime
 from io import StringIO
-from pprint import pprint
+from pprint import pprint, pformat
 
 import discord
 from discord.ext.commands import *
@@ -13,7 +13,7 @@ from src.core import CustomBot
 from src.errors import EpflError
 
 # Global variable and function because I'm too lazy to make a metaclass
-from src.utils import myembed, with_max_len, py
+from src.utils import myembed, with_max_len, py, french_join, fg
 
 handlers = {}
 
@@ -32,104 +32,142 @@ def handles(error_type):
     return decorator
 
 
+def eprint(*args, **kwargs):
+    """Alias to print that defaults to stderr"""
+    kwargs.setdefault("file", sys.stderr)
+    print(*args, **kwargs)
+
+
 class ErrorsCog(Cog):
     """This cog defines all the handles for errors."""
+
+    DONT_LOG = CommandNotFound,
+    """Tuple of Exception classes to not log to discord"""
 
     def __init__(self, bot: CustomBot):
         self.bot = bot
 
-    @Cog.listener()
-    async def on_command_error(self, ctx: Context, error: CommandError):
-        err = error if not isinstance(error, CommandInvokeError) else error.original
-
-        now = datetime.now().ctime()
+    def get_tb(self, exc):
         trace = StringIO()
-        traceback.print_tb(err.__traceback__, file=trace)
+        traceback.print_tb(exc.__traceback__, file=trace)
+        trace.seek(0)
+        return trace.read()
 
-        print("---" * 4, file=sys.stderr)
-        print(now, file=sys.stderr)
-        print(repr(err), ctx.author, ctx.message.content, sep="\n", file=sys.stderr)
-        traceback.print_tb(err.__traceback__, file=sys.stderr)
+    def get_handler(self, exc):
+        # We take the first superclass with an handler defined
+        for type_ in exc.__class__.__mro__:
+            handler = handlers.get(type_)
+            if handler:
+                return handler
 
-        if not isinstance(err, (CommandNotFound)):
-            # Always send a message in the log channel
-            embed = myembed(
-                f"A {err.__class__.__name__} happened",
-                repr(err),
-                _traceback=py(with_max_len(trace)),
-                time=now,
+        raise RuntimeError(f"No handler for exception {exc}. Bases: {exc.__class__.__mro__}")
+
+    def error_print(self, exc, *args):
+        if isinstance(exc, CommandInvokeError):
+            exc = exc.original
+
+        eprint("-" * 12)
+        eprint(datetime.now().ctime())
+        eprint(repr(exc))
+        eprint(*args, sep="\n")
+        eprint()
+        while exc:
+            traceback.print_tb(exc.__traceback__, file=sys.stderr)
+            exc = exc.__cause__
+            if exc:
+                eprint()
+                eprint("Caused by:")
+        eprint("-" * 12)
+
+    def error_embed(self, exc: Exception, event='', **fields):
+        if isinstance(exc, CommandInvokeError):
+            exc = exc.original
+
+        errors = []
+        e = exc
+        while e:
+            errors.append(e)
+            e = e.__cause__
+        # errors = reversed(errors)
+
+        embed = myembed(
+            f"A {exc.__class__.__name__} happened" + f' during {event} event' * bool(event),
+            py("\n from: ".join(repr(e) for e in errors)),
+            time=datetime.now().ctime(),
+            **fields
+        )
+
+        for i, exc in enumerate(errors):
+            embed.add_field(
+                name=f'Traceback of {exc.__class__.__name__}',
+                value=py(with_max_len(self.get_tb(exc))),
+                inline=False,
+            )
+
+        return embed
+
+    @Cog.listener()
+    async def on_command_error(self, ctx: Context, exc: CommandError):
+        # Everything on stderr
+        self.error_print(exc, ctx.author, ctx.message.content)
+
+        # Less spam on discord
+        if not isinstance(exc, self.DONT_LOG):
+            embed = self.error_embed(
+                exc,
                 author=ctx.author.mention,
                 message_id=ctx.message.id,
                 _message=with_max_len(ctx.message.content),
             )
             await self.bot.get_channel(LOG_CHANNEL).send(embed=embed)
 
-        # We take the first superclass with an handler defined
-        handler = None
-        for type_ in error.__class__.__mro__:
-            handler = handlers.get(type_)
-            if handler:
-                break
-
-        if handler is None:
-            # Default handling
-            msg = repr(error)
-        else:
-            msg = await maybe_coroutine(handler, self, ctx, error)
+        # Handling error for Users
+        handler = self.get_handler(exc)
+        msg = await maybe_coroutine(handler, self, ctx, exc)
 
         if msg:
             message = await ctx.send(msg)
             await self.bot.wait_for_bin(ctx.message.author, message)
 
-
     async def on_error(self, event, *args, **kwargs):
-        type_, value, traceback_ = sys.exc_info()
-        now = datetime.now()
+        type_, exc, traceback_ = sys.exc_info()
 
         # stderr
-        print("---" * 4, file=sys.stderr)
-        print(now.ctime(), file=sys.stderr)
-        print(event, args, kwargs, sep="\n", file=sys.stderr)
-        traceback.print_tb(traceback_, file=sys.stderr)
+        self.error_print(exc, f"Event: {event}", args, kwargs)
 
-        # Also send embed
-        trace = StringIO()
-        args_io = StringIO()
-        kwargs_io = StringIO()
+        # Discord log
+        if isinstance(exc, self.DONT_LOG):
+            return
 
-        traceback.print_tb(traceback_, file=trace)
-        if args:  # So they don't appear if empty
-            pprint(args, args_io)
-        if kwargs:
-            pprint(kwargs, kwargs_io)
-
-        embed = myembed(
-            f"{type_.__name__} during {event} event",
-            repr(value),
-            traceback=py(with_max_len(trace)),
-            _args=py(with_max_len(args_io)),
-            _kwargs=py(with_max_len(kwargs_io)),
-            time=now.ctime(),
+        embed = self.error_embed(
+            exc,
+            event,
+            args=pformat(args),
+            kwargs=pformat(kwargs)
         )
-
         await self.bot.get_channel(LOG_CHANNEL).send(embed=embed)
 
+    @handles(Exception)
+    def on_exception(self, ctx, exc):
+        return repr(exc)
+
     @handles(EpflError)
-    async def on_epfl_error(self, ctx: Context, error: EpflError):
-        msg = await ctx.send(error.msg)
-        await self.bot.wait_for_bin(ctx.author, msg)
+    def on_epfl_error(self, ctx: Context, error: EpflError):
+        return error.msg
 
     @handles(CommandInvokeError)
     async def on_command_invoke_error(self, ctx, error):
-        specific_handler = handlers.get(type(error.original))
+        specific_handler = self.get_handler(error.original)
 
         if specific_handler:
-            return await specific_handler(self, ctx, error.original)
+            return await maybe_coroutine(specific_handler, self, ctx, error.original)
+
+        eprint(fg(f"No specific handler for {error.original.__class__.__name__}."))
 
         return (
-            error.original.__class__.__name__
-            + ": "
-            + (str(error.original) or str(error))
+                error.original.__class__.__name__
+                + ": "
+                + (str(error.original) or str(error))
         )
 
     @handles(CommandNotFound)

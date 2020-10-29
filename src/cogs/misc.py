@@ -195,8 +195,15 @@ class MiscCog(Cog, name="Divers"):
     @guild_only()
     @commands.has_role(Role.MODO)
     @command(name="temp-hide", aliases=["th"])
-    async def temp_hide_cmd(self, ctx: Context):
-        """Hide the channel to everyone until next message (to prevent pings)."""
+    async def temp_hide_cmd(self, ctx: Context, duration:int =60):
+        """
+        Hide the channel for a given time. Useful to prevent pings.
+
+        The channel is hidden for a default of 60s and can be made visible
+        again earlier by deleting the `!temp-hide` message.
+
+        Works only on channels with less than 10 permissions.
+        """
 
         chan: GuildChannel = ctx.channel
         if isinstance(chan, GuildChannel):
@@ -211,7 +218,7 @@ class MiscCog(Cog, name="Divers"):
                 if p not in (ctx.guild.default_role, ctx.author):
                     await chan.set_permissions(p, overwrite=None)
 
-            await self.bot.wait_for_bin(ctx.author, ctx.message, timeout=60)
+            await self.bot.wait_for_bin(ctx.author, ctx.message, timeout=duration)
 
             await chan.set_permissions(ctx.author, overwrite=None)
             for p, perm in perms.items():
@@ -418,7 +425,7 @@ class MiscCog(Cog, name="Divers"):
         embed = discord.Embed(
             title=f"Aide pour la commande `!{comm.qualified_name}`",
             description=comm.help,
-            color=0xFFA500,
+            color=EMBED_COLOR,
         )
 
         if comm.aliases:

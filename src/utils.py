@@ -29,13 +29,13 @@ def py(txt):
     return f"```py\n{txt}```"
 
 
-def french_join(l, last_link="et"):
+def french_join(l, last_link="et", sep=', '):
     l = list(l)
     if not l:
         return ""
     if len(l) == 1:
         return l[0]
-    start = ", ".join(str(i) for i in l[:-1])
+    start = sep.join(str(i) for i in l[:-1])
     return f"{start} {last_link} {l[-1]}"
 
 

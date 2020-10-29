@@ -16,8 +16,8 @@ from src.core import CustomBot
 from src.errors import EpflError
 from src.utils import confirm, french_join, mentions_to_id, myembed, report_progress
 
-
 RoleOrChan = Union[discord.Role, GuildChannel]
+
 
 class Rule:
     def __init__(self, rule: str):
@@ -94,18 +94,17 @@ class RuleSet(dict):
             if chan is not None:
                 yield chan, rule
 
-    def items(self, guild: Guild=None):
+    def items(self, guild: Guild = None):
         if guild is None:
             yield from super(RuleSet, self).items()
         else:
             yield from self.roles(guild)
             yield from self.channels(guild)
 
-
     @classmethod
     def load(cls):
-        rules = yaml.load(File.RULES.read_text())
-
+        rules = yaml.safe_load(File.RULES.read_text())
+        
         return cls({item: Rule(r) for item, r in rules.items()})
 
     def save(self):
@@ -157,18 +156,23 @@ class PermsCog(Cog, name="Permissions"):
 
         # Logging what happens. We are in trouble (maybe) if we reach this point
         # more than twice for the same member
+
+        if self.modifying[after.id]:
+            title = f"Role race of level {self.modifying[after.id]}"
+        else:
+            title = "Automatic role update log"
+
         s = lambda x: french_join(r.mention for r in x) or "None"
         await self.bot.get_channel(LOG_CHANNEL).send(
             "" if self.modifying[after.id] == 0 else f"<@{OWNER}>",
             embed=myembed(
-            f"Role race of level {self.modifying[after.id]}" if self.modifying[
-                after.id] else "Automatic role update log",
-            after.mention,
-            _Before=s(sorted(bef, key=attrgetter("name"))),
-            Diff=s(diff),
-            Add=s(add),
-            Rem=s(rem),
-        ))
+                title,
+                after.mention,
+                _Before=s(sorted(bef, key=attrgetter("position"), reverse=True)),
+                Diff=s(diff),
+                Add=s(add),
+                Rem=s(rem),
+            ))
 
         self.modifying[after.id] += 1
         if self.modifying[after.id] > 1:
@@ -194,7 +198,8 @@ class PermsCog(Cog, name="Permissions"):
 
         del self.modifying[after.id]
 
-    def input_chan_or_role(self, val):
+    @staticmethod
+    def input_chan_or_role(val):
         """
         Convert a string that contains an int or a channel/role mention to an int.
 
@@ -206,7 +211,8 @@ class PermsCog(Cog, name="Permissions"):
         except ValueError:
             raise EpflError(f"Channel or role format not understood: `{val}`")
 
-    def get_role_or_channel(self, id_, guild: Guild):
+    @staticmethod
+    def get_role_or_channel(id_, guild: Guild):
         # This makes sure we take a role/channel from the guild and don't modify other guilds.
         return guild.get_role(id_) or guild.get_channel(id_)
 
@@ -245,7 +251,8 @@ class PermsCog(Cog, name="Permissions"):
 
         await self.setup_auto_rule(ctx, item, rule)
 
-    def have(self, item: RoleOrChan) -> Set[Member]:
+    @staticmethod
+    def have(item: RoleOrChan) -> Set[Member]:
         """Return the set of members that have the role/channel access."""
 
         if isinstance(item, discord.Role):
@@ -253,7 +260,8 @@ class PermsCog(Cog, name="Permissions"):
         else:
             return {m for m in item.overwrites if isinstance(m, Member)}
 
-    def need(self, item: RoleOrChan, rule: Optional[Rule]) -> Set[Member]:
+    @staticmethod
+    def need(item: RoleOrChan, rule: Optional[Rule]) -> Set[Member]:
         """Return the set of member that need the role/channel access according to the rule."""
 
         if rule is None:
@@ -317,7 +325,8 @@ class PermsCog(Cog, name="Permissions"):
 
         await ctx.send("Done !")
 
-    async def _set_perms(self, ctx, item: RoleOrChan, to_add, to_rem):
+    @staticmethod
+    async def _set_perms(ctx, item: RoleOrChan, to_add, to_rem):
         is_role = isinstance(item, discord.Role)
 
         async for member in report_progress(to_rem, ctx, f"Removing {'from ' * (not is_role)}{item.name}", 1):
@@ -334,19 +343,33 @@ class PermsCog(Cog, name="Permissions"):
     @has_role(Role.MODO)
     @perms.command("fix")
     async def perms_fix_cmd(self, ctx: Context):
+        """
+        Force recomputing the role/access rules and set them.
+
+        To use whenever someone should have a role but does not.
+        Asks for confirmation and reports progress.
+        """
+
         to_add = {}
         to_rem = {}
-        for item, rule in self.rules.roles(ctx.guild):
+        for item, rule in self.rules.items(ctx.guild):
             have = self.have(item)
             need = self.need(item, rule)
             to_rem[item] = have - need
             to_add[item] = need - have
 
+        add_tot = sum(map(len, to_add.values()))
+        rem_tot = sum(map(len, to_rem.values()))
+
+        if not (add_tot or rem_tot):
+            await ctx.send("Nothing to fix ! :)")
+            return
+
         embed = myembed(
             "Fixing automatic rules",
             "",
-            Added=sum(map(len, to_add.values())),
-            Removed=sum(map(len, to_rem.values())),
+            Added=add_tot,
+            Removed=rem_tot,
             Rules_fixed=french_join(i.mention for i in chain(to_rem) if to_add[i] or to_rem[i]),
         )
         if not await confirm(ctx, self.bot, embed=embed):
@@ -394,10 +417,7 @@ class PermsCog(Cog, name="Permissions"):
             return
 
         obj = self.get_role_or_channel(item, ctx.guild)
-        if isinstance(obj, discord.Role):
-            await self.setup_auto_rule(ctx, obj, None)
-        else:
-            await self.change_auto_channel(ctx, obj, None)
+        await self.setup_auto_rule(ctx, obj, None)
 
     @has_role(Role.MODO)
     @perms.command("clear")
