@@ -69,7 +69,7 @@ class MiscCog(Cog, name="Divers"):
     @guild_only()
     @command(name="info")
     async def info_cmd(self, ctx: Context, *, what: str=None):
-        """(modo) Affiche des informations à propos du serveur ou de l'argument."""
+        """Affiche des informations à propos du serveur ou de l'argument."""
 
         if what is None:
             return await self.send_server_info(ctx)
@@ -110,16 +110,17 @@ class MiscCog(Cog, name="Divers"):
         guild: Guild = ctx.guild
         embed = discord.Embed(title="État du serveur", color=EMBED_COLOR)
         in_sections = [g for g in guild.members if section(g) is not None]
-        no_role = [g for g in guild.members if g.top_role == guild.default_role]
+        no_year = [g for g in guild.members if get(g.roles, name="No year")]
         uptime = datetime.timedelta(seconds=round(time() - start_time()))
         text = len(guild.text_channels)
         vocal = len(guild.voice_channels)
         infos = {
             "Etudiants": len(in_sections),
-            "Sans rôle": len(no_role),
-            "Total": len(guild.members),
+            "Sans année": len(no_year),
+            "Membres": len(guild.members),
             "Salons texte": text,
             "Salons vocaux": vocal,
+            "Nombres de roles": len(guild.roles),
             "Bot uptime": uptime,
         }
 
@@ -256,15 +257,17 @@ class MiscCog(Cog, name="Divers"):
     @command(aliases=["pong"])
     async def ping(self, ctx):
         """Affiche la latence avec le bot."""
+
         msg: discord.Message = ctx.message
+        rep = "Ping !" if "pong" in msg.content.lower() else "Pong !"
+
         ping = msg.created_at.timestamp()
-        msg: discord.Message = await ctx.send("Pong !")
-        pong = time()
+        msg: discord.Message = await ctx.send(rep)
+        pong = msg.created_at.timestamp()
 
-        # 7200 is because we are UTC+2
-        delta = pong - ping - 7200
+        delta = pong - ping
 
-        await msg.edit(content=f"Pong ! Ça a pris {int(1000 * (delta))}ms")
+        await msg.edit(content=rep+f" Ça a pris {int(1000 * (delta))}ms")
 
     # ---------------- Calc ----------------- #
 

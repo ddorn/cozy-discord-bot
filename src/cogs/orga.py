@@ -3,14 +3,19 @@ from discord.ext.commands import Cog, command, group, Context, has_role
 from discord.utils import get
 
 from src.constants import *
-from src.core import CustomBot
+from src.core import CustomBot, CustomCog, CogConfig
 from src.errors import EpflError
-from src.utils import official_guild, myembed
+from src.utils import official_guild, myembed, has_configured
 
 
-class OrgaCog(Cog):
-    def __init__(self, bot: CustomBot):
-        self.bot = bot
+class OrgaCog(CustomCog, name="Organisation"):
+
+    class Config(CogConfig):
+        event_category: int
+        __event_category__ = "The category in which to put events"
+
+        orga_chat: int
+        __orga_chat__ = "The private channel with the organisers"
 
     @group("orga", aliases=["o"], invoke_without_command=True)
     @has_role(Role.ORGA)
@@ -18,7 +23,9 @@ class OrgaCog(Cog):
     async def orga(self, ctx: Context):
         """Affiche l'aide pour les organisateurs d'événements."""
 
-        orga_chan = ctx.guild.get_channel(Channels.CHAT_ORGA)
+        with self.config(ctx.guild, "orga_chat") as conf:
+            orga_chan = ctx.guild.get_channel(conf.orga_chat)
+
         diego = self.bot.get_user(OWNER)
         orga = get(ctx.guild.roles, name=Role.ORGA)
 
@@ -63,6 +70,7 @@ class OrgaCog(Cog):
 
     @orga.command("new")
     @official_guild()
+    @has_role(Role.ORGA)
     async def new_event_cmd(self, ctx: Context, *, event: str):
         """
         Crée un role et un salon vocal+texte pour un event.
@@ -115,7 +123,7 @@ class OrgaCog(Cog):
         }
 
         # So we create a text and voice channel in the category
-        cat = guild.get_channel(Channels.EVENT_CATEGORY)
+        cat = guild.get_channel(self.config(ctx.guild).event_category)
         event_text = await guild.create_text_channel(
             name=event,
             overwrites=overwrites,
@@ -131,7 +139,6 @@ class OrgaCog(Cog):
 
         # Confirmation
         await ctx.send(f"J'ai créé {event_role.mention} et {event_text.mention} ! Amusez vous bien ! :robot:")
-
 
 
 def setup(bot: CustomBot):

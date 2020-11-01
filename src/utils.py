@@ -3,14 +3,18 @@ from functools import wraps
 from io import StringIO
 from pprint import pprint
 from time import time
-from typing import Optional, Union
+from typing import Optional, Union, Type, TYPE_CHECKING
 
 import discord
 import psutil
 from discord.ext import commands
-from discord.ext.commands import Bot, Context
+from discord.ext.commands import Bot, Context, NoPrivateMessage
 
 from src.constants import *
+from src.errors import EplfOnlyError, ConfigUndefined
+
+if TYPE_CHECKING:
+    from src.core import CogConfig, Undefined
 
 
 def fg(text, color: int = 0xFFA500):
@@ -196,13 +200,43 @@ def start_time():
     return psutil.Process().create_time()
 
 
+# A collection of useful checks
+
+
 def official_guild():
-    """A check tha passes only of the command is invoked in the EPFL Community guild."""
+    """A check that passes only of the command is invoked in the EPFL Community guild."""
+
+    def predicate(ctx: Context):
+        if ctx.guild is None or ctx.guild.id != EPFL_GUILD:
+            raise EplfOnlyError()
+        return True
+
+    return commands.check(predicate)
+
+
+def has_configured(config: "Type[CogConfig]", *names):
+    """A check that verifies that all names are defined in the config for the server.
+
+    Implies guild_only."""
+
+    print(repr(config), config._annotations(), config.__annotations__)
+
+    missing = set(names) - set(config)
+    print(missing, set(names), set(config))
+    if missing:
+        raise ValueError(f"Invalid config names: "
+                         + french_join(missing, "and")
+                         + f"\n Valid: {french_join(config, 'and')}.")
 
     def predicate(ctx: Context):
         if ctx.guild is None:
-            return False
-        return ctx.guild.id == EPFL_GUILD
+            raise NoPrivateMessage()
+
+        conf = config(ctx.guild)
+        undef = [name for name in names if conf[name] is Undefined]
+        if undef:
+            raise ConfigUndefined(config, undef)
+        return True
 
     return commands.check(predicate)
 

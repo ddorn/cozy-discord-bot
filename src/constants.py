@@ -23,10 +23,10 @@ DISCORD_TOKEN = os.environ.get("EPFL_DISCORD_TOKEN")
 
 if DISCORD_TOKEN is None:
     print("No token for the bot were found.")
-    print("You need to set the EPFL_DISCORD_TOKEN variable in your environement")
+    print("You need to set the EPFL_DISCORD_TOKEN variable in your environment")
     print("Or just run:")
     print()
-    print(f'    EPFL_DISCORD_TOKEN="your token here" python bot.py')
+    print('    EPFL_DISCORD_TOKEN="your token here" python bot.py')
     print()
     quit(1)
 
@@ -80,7 +80,7 @@ class Channels:
     CHAT_ORGA = 771143198487085077
     DEV_BOT_CHANNEL = 753584773661982770
     LOG_CHANNEL = 770004202406674433
-    EVENT_CATEGORY = 771423740701179914
+
 
 class Emoji:
     HEART = "❤️"
@@ -101,6 +101,7 @@ class File:
     HUGS = TOP_LEVEL / "data" / "hugs"
     REMINDERS = DATA / "reminders"
     RULES = DATA / "rules.yaml"
+    CONFIG = DATA / "config.yaml"
 
 
 def setup(_):

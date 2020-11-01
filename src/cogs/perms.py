@@ -338,7 +338,7 @@ class PermsCog(Cog, name="Permissions"):
             if is_role:
                 await member.add_roles(item)
             else:
-                await item.set_permissions(member, read_messages=True)
+                await item.set_permissions(member, read_messages=True, send_messages=True)
 
     @has_role(Role.MODO)
     @perms.command("fix")

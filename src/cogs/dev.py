@@ -16,7 +16,7 @@ from discord.ext.commands import (
     ExtensionNotLoaded,
     Context,
     is_owner,
-)
+    ExtensionFailed)
 from discord.utils import get
 from ptpython.repl import embed
 
@@ -27,12 +27,14 @@ from src.utils import fg, french_join, send_all, with_max_len, pprint_send, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
+    "d": "dev",
     "e": "epfl",
     "m": "misc",
     "o": "orga",
     "p": "perms",
     "r": "errors",
     "re": "remind",
+    "s": "settings",
     "u": "src.utils",
     "v": "dev",
 }
@@ -108,7 +110,23 @@ class DevCog(Cog, name="Dev tools"):
 
         if not names:
             self.bot.reload()
-            await ctx.send(":tada: The bot was reloaded !")
+            working = 0
+            failed = []
+            last_ex = None
+            for ex in list(self.bot.extensions):
+                try:
+                    self.bot.reload_extension(ex)
+                except ExtensionFailed as e:
+                    failed.append(f"`{ex}`")
+                    last_ex = e
+                else:
+                    working += 1
+            msg = f":tada: The bot was reloaded ! With {working} extensions."
+            if failed:
+                msg += "But " + french_join(failed, "and") + " failed."
+            await ctx.send(msg)
+            if last_ex:
+                raise last_ex
             return
 
         for name in names:

@@ -15,6 +15,9 @@ def start():
     # Load all cogs in File.COGS
     for cog in File.COGS.glob("[^_]*.py"):
         bot.load_extension(cog.relative_to(File.TOP_LEVEL).as_posix().replace("/", ".")[:-3])
+    bot.load_extension("src.errors")
+    bot.load_extension("src.utils")
+    bot.load_extension("src.constants")
 
     # Let's goooo
     bot.run(DISCORD_TOKEN)

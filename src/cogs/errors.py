@@ -153,7 +153,7 @@ class ErrorsCog(Cog):
 
     @handles(EpflError)
     def on_epfl_error(self, ctx: Context, error: EpflError):
-        return error.msg
+        return error.message
 
     @handles(CommandInvokeError)
     async def on_command_invoke_error(self, ctx, error):
