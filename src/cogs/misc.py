@@ -198,7 +198,7 @@ class MiscCog(Cog, name="Divers"):
     @command(name="temp-hide", aliases=["th"])
     async def temp_hide_cmd(self, ctx: Context, duration:int =60):
         """
-        Hide the channel for a given time. Useful to prevent pings.
+        (modo) Hide the channel for a given time. Useful to prevent pings.
 
         The channel is hidden for a default of 60s and can be made visible
         again earlier by deleting the `!temp-hide` message.

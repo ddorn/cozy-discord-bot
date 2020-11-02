@@ -15,31 +15,60 @@ __all__ = ["to_raw", "to_nice"]
 
 
 class Converter:
-    raw_type = str
-    nice_type = str
+    """Base class for all converters.
 
-    def get_guild(self, guild: int, force=True) -> Guild:
-        guild: Guild = BOT.get_guild(guild)
-        if not isinstance(guild, Guild) and force:
-            raise ValueError(f"`{guild}` is not a valid guild.")
+    Converters convert values between raw and nice types. The
+    raw type is the type meant to be serialised in yaml, while
+    the nice type is meant to be used in the program.
 
-        return guild
+    To implement a converter for a type, {nice_type} and {raw_type}
+    should be set and {to_raw} and {to_nice} must be implemented.
+
+    Refer to the documentation of each function for more.
+    """
+
+    raw_type: Type = str
+    """Type stored in yaml."""
+    nice_type: Type = str
+    """Typed used in the program/config."""
 
     def __repr__(self):
-        return f"<{self.nice_type.__name__}>"
+        return f"Conv({self.nice_type.__name__})"
 
     def to_raw(self, nice: nice_type):
+        """Convert a nice value to a raw value.
+
+        It can be assumed that {nice} will always be a nice value,
+        according to {is_nice()}.
+
+        Raises ValueError when the conversion is not possible."""
+
         return self.raw_type(nice)
 
-    def to_nice(self, raw: raw_type, guild: int):
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
+        """Convert any value to a nice value.
+
+        to_nice should be more powerful than to_raw and handle the values
+        that aren't nice, like string representations.
+
+        It can be assumed that that raw will never be a nice value.
+
+        Raises ValueError when the conversion is not possible."""
+
         return self.nice_type(raw)
 
     def is_nice(self, value: Union[raw_type, nice_type]) -> bool:
+        """Whether a value is in the nice form."""
         return isinstance(value, self.nice_type)
 
     def is_raw(self, value):
+        """Whether a value is in the raw form."""
         return isinstance(value, self.raw_type)
 
+    def assert_guild(self, guild: Optional[Guild]):
+        """Raise a value error if the guild is none."""
+        if guild is None:
+            raise ValueError(f"`{guild}` is not a valid guild but {self} requires a guild.")
 
 class IntConverter(Converter):
     raw_type = int
@@ -47,6 +76,7 @@ class IntConverter(Converter):
 
 
 class AnyConverter(Converter):
+    """Do nothing converter. Leaves objects unchanged."""
     raw_type = object
     nice_type = object
 
@@ -67,10 +97,9 @@ class ChannelConverter(Converter):
     def to_raw(self, nice: nice_type):
         return nice.id
 
-    def to_nice(self, raw: raw_type, guild: int) -> Union[TextChannel, VoiceChannel]:
-
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]) -> Union[TextChannel, VoiceChannel]:
         if self.force_guild:
-            guild = self.get_guild(guild)
+            self.assert_guild(guild)
             iterator = lambda: guild.channels
         else:
             iterator = BOT.get_all_channels
@@ -106,7 +135,7 @@ class TextChannelConverter(ChannelConverter):
     nice_type = TextChannel
     force_guild = True
 
-    def to_nice(self, raw, guild: int):
+    def to_nice(self, raw, guild: Optional[Guild]):
         chan = super().to_nice(raw, guild)
 
         if not isinstance(chan, self.nice_type):
@@ -121,7 +150,7 @@ class CategoryConverter(ChannelConverter):
     nice_type = CategoryChannel
     force_guild = False
 
-    def to_nice(self, raw, guild: int):
+    def to_nice(self, raw, guild: Optional[Guild]):
         chan = super().to_nice(raw, guild)
 
         if not isinstance(chan, self.nice_type):
@@ -136,7 +165,7 @@ class VoiceChannelConverter(ChannelConverter):
     nice_type = VoiceChannel
     force_guild = False
 
-    def to_nice(self, raw, guild: int):
+    def to_nice(self, raw, guild: Optional[Guild]):
         chan = super().to_nice(raw, guild)
 
         if not isinstance(chan, self.nice_type):
@@ -152,8 +181,8 @@ class MemberConverter(Converter):
     def to_raw(self, nice: nice_type):
         return nice.id
 
-    def to_nice(self, raw: raw_type, guild: int):
-        guild = self.get_guild(guild)
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
+        self.assert_guild(guild)
 
         if isinstance(raw, str):
             # Try exact name/nick match
@@ -183,8 +212,8 @@ class RoleConverter(Converter):
     def to_raw(self, nice: nice_type):
         return nice.id
 
-    def to_nice(self, raw: raw_type, guild: int):
-        guild = self.get_guild(guild)
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
+        self.assert_guild(guild)
 
         if isinstance(raw, str):
             role = get(guild.roles, name=raw) \
@@ -214,7 +243,7 @@ class ListOf(Converter):
     def to_raw(self, nice: nice_type):
         return [self.inner_type.to_raw(n) for n in nice]
 
-    def to_nice(self, raw: raw_type, guild: int):
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
         return [self.inner_type.to_nice(r, guild) for r in raw]
 
     def is_nice(self, value) -> bool:
@@ -238,7 +267,7 @@ class DictOf(Converter):
     def to_raw(self, nice: nice_type):
         return {self.key_type.to_raw(key): self.value_type.to_raw(val) for key, val in nice.items()}
 
-    def to_nice(self, raw: raw_type, guild: int):
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
         return {
             self.key_type.to_nice(key, guild): self.value_type.to_nice(val, guild)
             for key, val in raw.items()
@@ -271,7 +300,7 @@ class DataclassConverter(Converter):
             for field, conv in self.converters.items()
         }
 
-    def to_nice(self, raw: raw_type, guild: int):
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
         return self.dataclass(**{
             field: conv.to_nice(raw[field], guild)
             for field, conv in self.converters.items()
@@ -312,10 +341,7 @@ def to_raw(value, nice_type: Union[Type, Converter]=None):
     return converter.to_raw(value)
 
 
-def to_nice(value, nice_type: Union[type, Converter], guild: Optional[Union[int, Guild]]):
-    if isinstance(guild, Guild):
-        guild = guild.id
-
+def to_nice(value, nice_type: Union[type, Converter], guild: Optional[Guild]):
     converter = to_converter(nice_type)
 
     if converter.is_nice(value):

@@ -310,7 +310,7 @@ CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
     @is_owner()
     @send_all
     async def warn_power_cmd(self, ctx: Context):
-        """Warn the owner when the server is unplugged."""
+        """(owner) Warn the owner when the server is unplugged."""
 
         self.power_warn_on = not self.power_warn_on
 
