@@ -12,7 +12,7 @@ from discord.abc import GuildChannel
 from discord.ext.commands import (Cog, Context, group, has_role)
 
 from src.constants import *
-from src.core import CustomBot
+from src.core import CustomBot, CustomCog, CogConfig
 from src.errors import EpflError
 from src.utils import confirm, french_join, mentions_to_id, myembed, report_progress
 
@@ -125,9 +125,14 @@ class RuleSet(dict):
         return inputs & outputs
 
 
-class PermsCog(Cog, name="Permissions"):
+class PermsCog(CustomCog, name="Permissions"):
+
+    class Config(CogConfig):
+        log: bool = False
+        __log__ = "Send logs to the dev about role changes."
+
     def __init__(self, bot: CustomBot):
-        self.bot = bot
+        super().__init__(bot)
         self.rules = RuleSet.load()
         self.modifying = defaultdict(int)
 
@@ -154,25 +159,27 @@ class PermsCog(Cog, name="Permissions"):
         if not add and not rem:
             return  # Nothing to do !
 
-        # Logging what happens. We are in trouble (maybe) if we reach this point
-        # more than twice for the same member
 
-        if self.modifying[after.id]:
-            title = f"Role race of level {self.modifying[after.id]}"
-        else:
-            title = "Automatic role update log"
+        if self.get_conf(after.guild, "log"):
+            # Logging what happens. We are in trouble (maybe) if we reach this point
+            # more than twice for the same member
 
-        s = lambda x: french_join(r.mention for r in x) or "None"
-        await self.bot.get_channel(Channels.LOG_CHANNEL).send(
-            "" if self.modifying[after.id] == 0 else f"<@{OWNER}>",
-            embed=myembed(
-                title,
-                after.mention,
-                _Before=s(sorted(bef, key=attrgetter("position"), reverse=True)),
-                Diff=s(diff),
-                Add=s(add),
-                Rem=s(rem),
-            ))
+            if self.modifying[after.id]:
+                title = f"Role race of level {self.modifying[after.id]}"
+            else:
+                title = "Automatic role update log"
+
+            s = lambda x: french_join(r.mention for r in x) or "None"
+            await self.bot.get_channel(Channels.LOG_CHANNEL).send(
+                "" if self.modifying[after.id] == 0 else f"<@{OWNER}>",
+                embed=myembed(
+                    title,
+                    after.mention,
+                    _Before=s(sorted(bef, key=attrgetter("position"), reverse=True)),
+                    Diff=s(diff),
+                    Add=s(add),
+                    Rem=s(rem),
+                ))
 
         self.modifying[after.id] += 1
         if self.modifying[after.id] > 1:
@@ -344,7 +351,7 @@ class PermsCog(Cog, name="Permissions"):
     @perms.command("fix")
     async def perms_fix_cmd(self, ctx: Context):
         """
-        Force recomputing the role/access rules and set them.
+        (modo) Force recomputing the role/access rules and set them.
 
         To use whenever someone should have a role but does not.
         Asks for confirmation and reports progress.

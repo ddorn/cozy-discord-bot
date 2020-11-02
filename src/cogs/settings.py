@@ -25,7 +25,7 @@ class SettingsCog(CustomCog, name="Settings"):
                         value = value.mention
                     else:
                         value = f"`{value}`"
-                    t = f"`{cog.name()}.{name}`: {value}\n ⇒ {descr}"
+                    t = f"`{cog.name()}.{name}`: {value}\n  ⇒ {descr}"
                     sets.append(t)
 
                 if sets:

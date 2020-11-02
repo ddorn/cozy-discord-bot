@@ -24,6 +24,9 @@ class Converter:
     To implement a converter for a type, {nice_type} and {raw_type}
     should be set and {to_raw} and {to_nice} must be implemented.
 
+    Subclasses of Converter are automatically registered according
+    to their nice_type.
+
     Refer to the documentation of each function for more.
     """
 
@@ -85,6 +88,22 @@ class AnyConverter(Converter):
 
     def to_nice(self, raw: raw_type, guild: int):
         return raw
+
+
+class BoolConverter(Converter):
+    raw_type = bool
+    nice_type = bool
+
+    def to_nice(self, raw: raw_type, guild: Optional[Guild]):
+        if isinstance(raw, str):
+            if raw.lower() in "yes oui y ok o 0 true".split():
+                return True
+            elif raw.lower() in "no non n nope 1 false".split():
+                return False
+        elif isinstance(raw, int):
+            return bool(raw)
+
+        raise ValueError(f"Boolean not recognised: `{raw}`")
 
 
 class ChannelConverter(Converter):
