@@ -1,30 +1,43 @@
-from discord import Guild, PermissionOverwrite, Color
-from discord.ext.commands import Cog, command, group, Context, has_role
+from dataclasses import dataclass
+from typing import Any
+
+import discord
+from discord import Guild, PermissionOverwrite, Color, TextChannel, CategoryChannel, VoiceChannel, Member
+from discord.ext.commands import Cog, command, group, Context, has_role, is_owner
 from discord.utils import get
 
 from src.constants import *
+from src.converters import DictOf, ListOf, to_raw
 from src.core import CustomBot, CustomCog, CogConfig
 from src.errors import EpflError
-from src.utils import official_guild, myembed, has_configured
+from src.utils import official_guild, myembed, french_join, confirm, pprint_send
+
+
+@dataclass
+class Event:
+    creator: Member
+    role: discord.Role
+    voice: ListOf(VoiceChannel)
+    text: ListOf(TextChannel)
 
 
 class OrgaCog(CustomCog, name="Organisation"):
 
     class Config(CogConfig):
-        event_category: int
+        event_category: CategoryChannel
         __event_category__ = "The category in which to put events"
 
-        orga_chat: int
-        __orga_chat__ = "The private channel with the organisers"
+        chat: TextChannel
+        __chat__ = "The private channel with the organisers"
+
+        events: DictOf(str, Event) = {}  # Stores event names to (creator, role, text chan, voice, chan)
 
     @group("orga", aliases=["o"], invoke_without_command=True)
     @has_role(Role.ORGA)
-    @official_guild()
     async def orga(self, ctx: Context):
-        """Affiche l'aide pour les organisateurs d'événements."""
+        """(orga) Affiche l'aide pour les organisateurs d'événements."""
 
-        with self.config(ctx.guild, "orga_chat") as conf:
-            orga_chan = ctx.guild.get_channel(conf.orga_chat)
+        orga_chan = self.get_conf(ctx.guild, "chat")
 
         diego = self.bot.get_user(OWNER)
         orga = get(ctx.guild.roles, name=Role.ORGA)
@@ -69,76 +82,127 @@ class OrgaCog(CustomCog, name="Organisation"):
         ))
 
     @orga.command("new")
-    @official_guild()
     @has_role(Role.ORGA)
     async def new_event_cmd(self, ctx: Context, *, event: str):
-        """
-        Crée un role et un salon vocal+texte pour un event.
-        """
+        """(orga) Crée un role et un salon vocal+texte pour un event."""
 
         guild: Guild = ctx.guild
         passe_partout = guild.get_role(PASSE_PARTOUT_ROLE)
         reason = f"{ctx.author} wants to organise an event."
 
-        if get(guild.roles, name=event):
-            raise EpflError(f"Le nom *{event}* est déjà pris.")
+        conf: OrgaCog.Config
+        with self.config(guild, "event_category") as conf:
+            if event in conf.events or get(guild.roles, name=event):
+                raise EpflError(f"Le nom *{event}* est déjà pris.")
 
-        event_role = await guild.create_role(
-            reason=reason,
-            name=event,
-            color=Color(0xcc99ff),
-            mentionable=True,
-        )
-        await ctx.author.add_roles(event_role)
+            event_role = await guild.create_role(
+                reason=reason,
+                name=event,
+                color=Color(0xcc99ff),
+                mentionable=True,
+            )
+            await ctx.author.add_roles(event_role)
 
-        # Nothing special, we give the orga most perms
-        # especially perms to manage the channel,
-        # Event can interact, Passe-partout can see
-        # And the rest can not.
-        overwrites = {
-            ctx.author: PermissionOverwrite(
-                read_messages=True,
-                send_messages=True,
-                connect=True,
-                manage_channels=True,
-                manage_permissions=True,
-                manage_messages=True,
-                mute_members=True,
-                deafen_members=True,
-                priority_speaker=True,
-            ),
-            event_role: PermissionOverwrite(
-                read_messages=True,
-                send_messages=True,
-                connect=True,
-            ),
-            passe_partout: PermissionOverwrite(
-                read_messages=True,
-            ),
-            guild.default_role: PermissionOverwrite(
-                read_messages=False,
-                send_messages=False,
-                connect=False,
-            ),
-        }
+            # Nothing special, we give the orga most perms
+            # especially perms to manage the channel,
+            # Event can interact, Passe-partout can see
+            # And the rest can not.
+            overwrites = {
+                ctx.author: PermissionOverwrite(
+                    read_messages=True,
+                    send_messages=True,
+                    connect=True,
+                    manage_channels=True,
+                    manage_permissions=True,
+                    manage_messages=True,
+                    mute_members=True,
+                    deafen_members=True,
+                    priority_speaker=True,
+                ),
+                event_role: PermissionOverwrite(
+                    read_messages=True,
+                    send_messages=True,
+                    connect=True,
+                ),
+                passe_partout: PermissionOverwrite(
+                    read_messages=True,
+                ),
+                guild.default_role: PermissionOverwrite(
+                    read_messages=False,
+                    send_messages=False,
+                    connect=False,
+                ),
+            }
 
-        # So we create a text and voice channel in the category
-        cat = guild.get_channel(self.config(ctx.guild).event_category)
-        event_text = await guild.create_text_channel(
-            name=event,
-            overwrites=overwrites,
-            category=cat,
-            reason=reason,
-        )
-        await guild.create_voice_channel(
-            name=event,
-            overwrites=overwrites,
-            category=cat,
-            reason=reason,
-        )
+            # So we create a text and voice channel in the category
+            event_text = await guild.create_text_channel(
+                name=event,
+                overwrites=overwrites,
+                category=conf.event_category,
+                reason=reason,
+            )
+            event_voice = await guild.create_voice_channel(
+                name=event,
+                overwrites=overwrites,
+                category=conf.event_category,
+                reason=reason,
+            )
 
-        # Confirmation
-        await ctx.send(f"J'ai créé {event_role.mention} et {event_text.mention} ! Amusez vous bien ! :robot:")
+            # Store the event name
+            conf.events[event] = to_raw(Event(ctx.author, event_role, [event_voice], [event_text]))
+
+            # Confirmation
+            await ctx.send(f"J'ai créé {event_role.mention} et {event_text.mention} ! Amusez vous bien ! :robot:")
+
+    @orga.command("del")
+    @has_role(Role.ORGA)
+    async def del_event_cmd(self, ctx: Context, *, event: str):
+        """(orga) Supprime un événement."""
+
+        with self.config(ctx.guild) as conf:
+            events = conf.events
+            if event not in events:
+                raise EpflError(f"`{event}` is not an event. "
+                                f"Valid names: {french_join(events, 'and')}.")
+
+            ev = events[event]
+
+            if ctx.author != ev.creator:
+                raise EpflError(f"You are not the organiser of this event. "
+                                f"Contact {ctx.author.mention} to delete it.")
+
+            if await confirm(ctx, self.bot, embed=myembed(
+                "Confirm event deletion",
+                "Those roles and channels will be deleted.",
+                Role=ev.role.mention,
+                Text=french_join([t.mention for t in ev.text], "and"),
+                Voice=french_join([t.mention for t in ev.voice], "and"),
+            )):
+
+
+                reason = f"{ctx.author.mention} deleted event {event}."
+                await ev.role.delete(reason=reason)
+                for t in ev.text:
+                    await t.delete(reason=reason)
+                for v in ev.voice:
+                    await v.delete(reason=reason)
+                del events[event]
+                conf.events = events
+
+    @command(name="events")
+    async def events(self, ctx: Context):
+        """Liste des événements en cours."""
+        events = self.get_conf(ctx.guild, "events")
+
+        if not events:
+            await ctx.send("Il n'y a pas d'événements en cours :(")
+            return
+
+        msg = f"Voici une liste de tous les événements actuels : \n - " \
+              + "\n - ".join(events)
+
+        await ctx.send(msg)
+
 
 
 def setup(bot: CustomBot):

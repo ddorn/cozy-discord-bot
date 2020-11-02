@@ -53,6 +53,21 @@ def mentions_to_id(s: str) -> str:
     return re.sub(r"<[@#][&!]?([0-9]{18,21})>", r"\1", s)
 
 
+def get_casefold(seq, **attrs):
+    """Return the first element of a list whose attr is casefold equal to the value.
+
+    Example:
+        >>> get_casefold(members, name="Diego")
+    """
+
+    assert len(attrs) == 1
+    k, v = attrs.popitem()
+    v = v.casefold()
+    for x in seq:
+        if getattr(x, k).casefold() == v:
+            return x
+
+
 def has_role(member, role: Union[str, tuple]):
     """Return whether the member has a role with this name."""
 
@@ -209,33 +224,6 @@ def official_guild():
     def predicate(ctx: Context):
         if ctx.guild is None or ctx.guild.id != EPFL_GUILD:
             raise EplfOnlyError()
-        return True
-
-    return commands.check(predicate)
-
-
-def has_configured(config: "Type[CogConfig]", *names):
-    """A check that verifies that all names are defined in the config for the server.
-
-    Implies guild_only."""
-
-    print(repr(config), config._annotations(), config.__annotations__)
-
-    missing = set(names) - set(config)
-    print(missing, set(names), set(config))
-    if missing:
-        raise ValueError(f"Invalid config names: "
-                         + french_join(missing, "and")
-                         + f"\n Valid: {french_join(config, 'and')}.")
-
-    def predicate(ctx: Context):
-        if ctx.guild is None:
-            raise NoPrivateMessage()
-
-        conf = config(ctx.guild)
-        undef = [name for name in names if conf[name] is Undefined]
-        if undef:
-            raise ConfigUndefined(config, undef)
         return True
 
     return commands.check(predicate)

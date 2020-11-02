@@ -13,6 +13,7 @@ __all__ = ["CustomBot"]
 from discord.utils import get
 
 from src.constants import *
+from src.converters import to_nice, to_raw
 from src.errors import ConfigUndefined
 
 
@@ -31,32 +32,72 @@ class CogConfigMeta(type):
 
 
 class CogConfig(metaclass=CogConfigMeta):
-    _cog = None  # type: CustomCog
+    """Base class for cog Configuration.
 
-    def __init__(self, guild):
-        self._guild = guild
-        self.load()
+    To use it, define a class Config(CogConfig) in
+    your cog class definition. The fields and their
+    types are defined with annotations on class variables.
+    Defaults are taken from the class attributes' values.
+    A description for the field can be set on __field__,
+    if there is no description, it can't be set in SettingsCog,
+    making it like a permanent storage for the cog.
+
+    Example:
+     >>> class MyCog(CustomCog):
+     >>>    class Config:
+     >>>        a: int
+     >>>        __a__ = "Description for a, which has no default value."
+     >>>
+     >>>        nickname: str = "Billy"
+     >>>        __nickname__ = "Nickname defaults to Billy."
+     >>>
+     >>>        storage: int  # No description prevent user from changing them in SettingsCog
+    """
+
+    _cog: "CustomCog" = None
+    """Cog in which the config is defined. This class attribute is set only on cog instantiation."""
 
     @classmethod
     def _annotations(cls) -> Dict:
+        """Return a dict of all config fields and associated types."""
+
+        # I don't understand why it doesn't work to put this in the metaclass...
+
         # Empty Config does not have __annotations__
-        return getattr(cls, "__annotations__", {})
+        try:
+            ann = cls.__annotations__
+        except AttributeError:
+            ann = {}
+
+        # Filter out private attributes
+        return {key: value for (key, value) in ann.items() if not key.startswith("_")}
+
+    _guild: Guild
+    _raw_conf: dict
+    def __init__(self, guild):
+        assert guild
+        super().__setattr__("_guild", guild)
+        super().__setattr__("_raw_conf", self.load())
 
     # Getter for information of settings
     @classmethod
-    def descr(cls, name):
-        return getattr(cls, f"__{name}__", "")
+    def descr(cls, field):
+        """Return the description for a field."""
+        return getattr(cls, f"__{field}__", "")
 
     @classmethod
-    def type_of(cls, name):
-        return cls._annotations()[name]
+    def type_of(cls, field):
+        """Return the type of a field."""
+        return cls._annotations()[field]
 
     @classmethod
-    def default_of(cls, name):
-        return getattr(cls, name, Undefined)
+    def default_of(cls, field):
+        """Return the default for a field. If not is set, return Undefined."""
+        return getattr(cls, field, Undefined)
 
     # Context manager for auto saving
     def __enter__(self):
+        """Context manager that auto-save the configuration upon exit."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -64,71 +105,100 @@ class CogConfig(metaclass=CogConfigMeta):
 
     # Iteration (redirected from class iteration)
     def __iter__(self):
+        """Iterate over the config fields' names."""
         return iter(self.__class__)
 
-    def __contains__(self, item):
-        return item in self.__class__
+    def __contains__(self, field):
+        """Whether a field is a valid config field."""
+        return field in self.__class__
 
-    def __getitem__(self, item):
-        if item not in self:
-            raise IndexError(f"{item} is not a valid config key")
-        return getattr(self, item)
+    def __getitem__(self, field):
+        """Return the value of the field.
+
+        Raises IndexError if the field is not valid."""
+
+        if field not in self:
+            raise AttributeError(f"{field} is not a valid config key")
+
+
+        try:
+            val = self._raw_conf[field]
+        except KeyError:
+            return Undefined
+
+        ret =  to_nice(val, self.type_of(field), self._guild)
+
+        print("GET", field, val, ret)
+        return ret
 
     def __setitem__(self, key, value):
+        """Set the value for the field.
+
+        Convert the value to the correct type in the process.
+        Raises AttributeError if the field is not valid."""
+
+        print("SET", key, value)
+
         if key not in self:
-            raise IndexError(f"{key} is not a valid config key")
+            raise AttributeError(f"{key} is not a valid config key")
 
         if value is not Undefined:
-            value  = self.type_of(key)(value)
+            # to_raw and to_nice are not symetric.
+            # to_nice is more powerful
+            typ = self.type_of(key)
+            value = to_raw(to_nice(value, typ, self._guild), typ)
 
-        setattr(self, key, value)
+        self._raw_conf[key] = value
+
+
+    def __getattribute__(self, item):
+        if not item.startswith("_") and item in self:
+            return self[item]
+        return super(CogConfig, self).__getattribute__(item)
+
+    __setattr__ = __setitem__
 
     @classmethod
     def name(cls):
         return cls._cog.name()
 
-    @classmethod
-    def slots(cls) -> Iterator[Tuple[str, Type, Any, str]]:
-        """Yield all the config slots.
-
-        They are tuples (name, type, default, description).
-        """
-
-        for name, typ in cls._annotations().items():
-            if name.startswith("_"):
-                continue
-
-            descr = cls.descr(name)
-            default = cls.default_of(name)
-            yield name, typ, default, descr
-
     def items(self) -> Dict[str, Any]:
         for name in self:
             yield name, self[name]
 
-    def _read_full_config(self):
+    @staticmethod
+    def _read_full_config():
         File.CONFIG.touch()
         return yaml.safe_load(File.CONFIG.read_text() or "{}")
 
     def load(self):
+        """Get a dict of all field and their value from the file."""
+
         conf = self._read_full_config()
         conf = conf.get(self._guild.id, {}).get(self.name(), {})
 
-        for name, typ, default, descr in self.slots():
-            value = conf.get(name, default)
+        d = {}
+        for name in self:
+            value = conf.get(name, self.default_of(name))
 
             # Reconstruct the value from the type
-            self[name] = value
+            d[name] = value
+
+        return d
 
     def save(self):
+        """Save this config in File.CONFIG."""
+
         full_config = self._read_full_config()
 
-        # Put all attributes in a dict, with defaults when needed
-        d = {}
-        for name, _, default, _ in self.slots():
-            val = self[name]
-            if val is not Undefined:
-                d[name] = val
+        # we only need to remove undefined from self._raw_dict
+        d = {
+            k: v
+            for k, v in self._raw_conf.items()
+            if v is not Undefined
+        }
+        print("DDDD", d)
+
         # and store it in full_config[guild][cog]
         full_config.setdefault(self._guild.id, {})[self.name()] = d
 
@@ -164,13 +234,25 @@ class CustomCog(Cog):
         if undef:
             raise ConfigUndefined(conf, undef)
 
-        return self.Config(guild)
+        return conf
+
+    def get_conf(self, guild: Union[int, Guild], field: str, raise_undefined=True):
+        """Return the value of {field} defined in the guild config.
+
+        If raise_undefined is true, raises a ConfigUndefined
+        when the field is not defined."""
+
+        require = (field,) if raise_undefined else ()
+        return self.config(guild, *require)[field]
 
     @classmethod
     def name(cls):
+        """Return the normalised name for the cog.
+
+        The normalised name is lowercase with the last 'cog' removed."""
         name = cls.__name__.lower()
         if name.endswith("cog"):
-            name = name[:-3]
+            return name[:-3]
         return name
 
 

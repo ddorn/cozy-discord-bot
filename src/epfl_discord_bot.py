@@ -18,6 +18,7 @@ def start():
     bot.load_extension("src.errors")
     bot.load_extension("src.utils")
     bot.load_extension("src.constants")
+    bot.load_extension("src.converters")
 
     # Let's goooo
     bot.run(DISCORD_TOKEN)

@@ -1,6 +1,6 @@
 from discord.ext.commands import Context, command, has_role
 
-from src.core import CustomCog, CustomBot, Undefined
+from src.core import CustomCog, CustomBot
 from src.constants import *
 from src.errors import EpflError
 from src.utils import myembed
@@ -14,16 +14,22 @@ class SettingsCog(CustomCog, name="Settings"):
         embed = myembed("All settings")
         for cog_name, cog in self.bot.cogs.items():
             if isinstance(cog, CustomCog):
+
                 sets = []
                 for name, value in cog.config(ctx.guild).items():
-                    t = f"`{cog.name()}.{name} = {value}`\n"
                     descr = cog.Config.descr(name)
-                    if descr:
-                        t += "   " + descr + "\n"
+                    if not descr:
+                        continue
+
+                    if hasattr(value, "mention"):
+                        value = value.mention
+                    else:
+                        value = f"`{value}`"
+                    t = f"`{cog.name()}.{name}`: {value}\n ⇒ {descr}"
                     sets.append(t)
 
                 if sets:
-                    embed.add_field(name=cog_name, value="\n".join(sets))
+                    embed.add_field(name=cog_name, value="\n".join(sets), inline=False)
 
         await ctx.send(embed=embed)
 
@@ -48,7 +54,8 @@ class SettingsCog(CustomCog, name="Settings"):
                             "`!settings` done une liste des réglages possibles.")
 
         with cog.config(ctx.guild) as conf:
-            if setting not in conf:
+            # Not description => not settable
+            if setting not in conf or not conf.descr(setting):
                 raise EpflError(f"{cog_name} n'a pas de réglage {setting}. "
                                 f"`!settings` done une liste des possibilités.")
 
