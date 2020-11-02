@@ -20,6 +20,8 @@ from src.errors import ConfigUndefined
 class Undef:
     def __repr__(self):
         return "Undefined"
+
+
 Undefined = Undef()
 
 
@@ -52,6 +54,8 @@ class CogConfig(metaclass=CogConfigMeta):
      >>>        __nickname__ = "Nickname defaults to Billy."
      >>>
      >>>        storage: int  # No description prevent user from changing them in SettingsCog
+
+     Defaults should be nice values or convert to nice values
     """
 
     _cog: "CustomCog" = None
@@ -72,12 +76,10 @@ class CogConfig(metaclass=CogConfigMeta):
         # Filter out private attributes
         return {key: value for (key, value) in ann.items() if not key.startswith("_")}
 
-    _guild: Guild
-    _raw_conf: dict
     def __init__(self, guild):
         assert guild
-        super().__setattr__("_guild", guild)
-        super().__setattr__("_raw_conf", self.load())
+        self._guild: Guild = guild
+        self.load()
 
     # Getter for information of settings
     @classmethod
@@ -92,8 +94,17 @@ class CogConfig(metaclass=CogConfigMeta):
 
     @classmethod
     def default_of(cls, field):
-        """Return the default for a field. If not is set, return Undefined."""
-        return getattr(cls, field, Undefined)
+        """Return the default for a field.
+
+        The default is always a nice value.
+        If not is set, return Undefined."""
+
+        try:
+            val = getattr(cls, field)
+        except AttributeError:
+            return Undefined
+
+        return to_nice(val, cls.type_of(field), None)
 
     # Context manager for auto saving
     def __enter__(self):
@@ -112,51 +123,27 @@ class CogConfig(metaclass=CogConfigMeta):
         """Whether a field is a valid config field."""
         return field in self.__class__
 
+    # Indexing, redirecting to attributes
     def __getitem__(self, field):
         """Return the value of the field.
 
-        Raises IndexError if the field is not valid."""
+        Raises KeyError if the field is not valid."""
 
         if field not in self:
-            raise AttributeError(f"{field} is not a valid config key")
+            raise KeyError(f"{field} is not a valid config key")
 
-
-        try:
-            val = self._raw_conf[field]
-        except KeyError:
-            return Undefined
-
-        ret =  to_nice(val, self.type_of(field), self._guild)
-
-        print("GET", field, val, ret)
-        return ret
+        return getattr(self, field)
 
     def __setitem__(self, key, value):
         """Set the value for the field.
 
         Convert the value to the correct type in the process.
-        Raises AttributeError if the field is not valid."""
-
-        print("SET", key, value)
+        Raises KeyError if the field is not valid."""
 
         if key not in self:
-            raise AttributeError(f"{key} is not a valid config key")
+            raise KeyError(f"{key} is not a valid config key")
 
-        if value is not Undefined:
-            # to_raw and to_nice are not symetric.
-            # to_nice is more powerful
-            typ = self.type_of(key)
-            value = to_raw(to_nice(value, typ, self._guild), typ)
-
-        self._raw_conf[key] = value
-
-
-    def __getattribute__(self, item):
-        if not item.startswith("_") and item in self:
-            return self[item]
-        return super(CogConfig, self).__getattribute__(item)
-
-    __setattr__ = __setitem__
+        setattr(self, key, value)
 
     @classmethod
     def name(cls):
@@ -177,14 +164,14 @@ class CogConfig(metaclass=CogConfigMeta):
         conf = self._read_full_config()
         conf = conf.get(self._guild.id, {}).get(self.name(), {})
 
-        d = {}
         for name in self:
-            value = conf.get(name, self.default_of(name))
 
-            # Reconstruct the value from the type
-            d[name] = value
+            try:
+                val = to_nice(conf[name], self.type_of(name), self._guild)
+            except KeyError:
+                val = self.default_of(name)
 
-        return d
+            setattr(self, name, val)
 
     def save(self):
         """Save this config in File.CONFIG."""
@@ -193,11 +180,10 @@ class CogConfig(metaclass=CogConfigMeta):
 
         # we only need to remove undefined from self._raw_dict
         d = {
-            k: v
-            for k, v in self._raw_conf.items()
+            k: to_raw(v, self.type_of(k))
+            for k, v in self.items()
             if v is not Undefined
         }
-        print("DDDD", d)
 
         # and store it in full_config[guild][cog]
         full_config.setdefault(self._guild.id, {})[self.name()] = d

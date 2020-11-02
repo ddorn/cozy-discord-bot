@@ -67,7 +67,7 @@ class MiscCog(Cog, name="Divers"):
         await self.bot.wait_for_bin(ctx.author, msg),
 
     @guild_only()
-    @command(name="info")
+    @command(name="info", aliases=["status"])
     async def info_cmd(self, ctx: Context, *, what: str=None):
         """Affiche des informations à propos du serveur ou de l'argument."""
 

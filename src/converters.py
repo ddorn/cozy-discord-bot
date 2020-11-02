@@ -1,6 +1,6 @@
 import dataclasses
 from dataclasses import is_dataclass
-from typing import Any, Type, TYPE_CHECKING, Union, Dict
+from typing import Any, Type, TYPE_CHECKING, Union, Dict, Optional
 
 import discord
 from discord import CategoryChannel, Guild, TextChannel, VoiceChannel, Member
@@ -312,7 +312,7 @@ def to_raw(value, nice_type: Union[Type, Converter]=None):
     return converter.to_raw(value)
 
 
-def to_nice(value, nice_type: Union[type, Converter], guild: int):
+def to_nice(value, nice_type: Union[type, Converter], guild: Optional[Union[int, Guild]]):
     if isinstance(guild, Guild):
         guild = guild.id
 
