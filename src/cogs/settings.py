@@ -9,6 +9,7 @@ from src.utils import myembed
 class SettingsCog(CustomCog, name="Settings"):
 
     @command(name="settings", aliases=["list-settings", "ls"])
+    @has_role(Role.MODO)
     async def settings_list_cmd(self, ctx: Context):
         """List all settings with their values."""
         embed = myembed("All settings")
@@ -39,7 +40,7 @@ class SettingsCog(CustomCog, name="Settings"):
     )
     @has_role(Role.MODO)
     async def set_cmd(self, ctx: Context, name: str, *, value: str):
-        """Set a setting for this guild."""
+        """(modo) Configure the bot's settings."""
 
         cog_name, _, setting = name.partition(".")
 

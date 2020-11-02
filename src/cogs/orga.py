@@ -21,8 +21,7 @@ class Event:
     text: ListOf(TextChannel)
 
 
-class OrgaCog(CustomCog, name="Organisation"):
-
+class OrgaCog(CustomCog, name="Events"):
     class Config(CogConfig):
         event_category: CategoryChannel
         __event_category__ = "The category in which to put events"
@@ -44,7 +43,7 @@ class OrgaCog(CustomCog, name="Organisation"):
 
         await ctx.send(embed=myembed(
             "Guide pour l'organisation d'un événement",
-            f"Tout d'abord merci à toi cher {orga.mention} pour ton énergie et ton temps, " 
+            f"Tout d'abord merci à toi cher {orga.mention} pour ton énergie et ton temps, "
             "de la part de tous les étudiants qui seront moins isolés "
             "grâce à toi! :smiling_face_with_3_hearts: \n"
             "Voici les outils que EPFL Community met à disposition de tous "
@@ -160,25 +159,23 @@ class OrgaCog(CustomCog, name="Organisation"):
         """(orga) Supprime un événement."""
 
         with self.config(ctx.guild) as conf:
-            events = conf.events
-            if event not in events:
+            if event not in conf.events:
                 raise EpflError(f"`{event}` is not an event. "
-                                f"Valid names: {french_join(events, 'and')}.")
+                                f"Valid names: {french_join(conf.events, 'and')}.")
 
-            ev = events[event]
+            ev = conf.events[event]
 
             if ctx.author != ev.creator:
                 raise EpflError(f"You are not the organiser of this event. "
                                 f"Contact {ctx.author.mention} to delete it.")
 
             if await confirm(ctx, self.bot, embed=myembed(
-                "Confirm event deletion",
-                "Those roles and channels will be deleted.",
-                Role=ev.role.mention,
-                Text=french_join([t.mention for t in ev.text], "and"),
-                Voice=french_join([t.mention for t in ev.voice], "and"),
+                    "Confirm event deletion",
+                    "Those roles and channels will be deleted.",
+                    Role=ev.role.mention,
+                    Text=french_join([t.mention for t in ev.text], "and"),
+                    Voice=french_join([t.mention for t in ev.voice], "and"),
             )):
-
 
                 reason = f"{ctx.author.mention} deleted event {event}."
                 await ev.role.delete(reason=reason)
@@ -186,8 +183,7 @@ class OrgaCog(CustomCog, name="Organisation"):
                     await t.delete(reason=reason)
                 for v in ev.voice:
                     await v.delete(reason=reason)
-                del events[event]
-                conf.events = events
+                del conf.events[event]
 
     @command(name="events")
     async def events(self, ctx: Context):
@@ -202,7 +198,6 @@ class OrgaCog(CustomCog, name="Organisation"):
               + "\n - ".join(events)
 
         await ctx.send(msg)
-
 
 
 def setup(bot: CustomBot):
