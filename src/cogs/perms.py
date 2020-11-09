@@ -198,7 +198,7 @@ class PermsCog(CustomCog, name="Permissions"):
         # Change channel access
         for chan in add:
             if isinstance(chan, GuildChannel):
-                await chan.set_permissions(after, read_messages=True)
+                await chan.set_permissions(after, read_messages=True, send_messages=True)
         for chan in rem:
             if isinstance(chan, GuildChannel):
                 await chan.set_permissions(after, overwrite=None)

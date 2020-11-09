@@ -14,7 +14,7 @@ from discord.utils import escape_mentions, get
 from src.constants import File, Emoji
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import send_all, pprint_send
+from src.utils import send_all, pprint_send, remove_mentions_as
 
 
 class RemindCog(Cog, name="Reminders"):
@@ -89,22 +89,12 @@ class RemindCog(Cog, name="Reminders"):
         when, ok = self.cal.parseDT(when, now)
 
         if not ok:
-            raise  EpflError("Sorry, I could not parse the date.")
+            raise EpflError("Sorry, I could not parse the date.")
 
         if when < now - timedelta(seconds=1):
             raise EpflError("The date is already passed.")
 
-        a: Member = ctx.author
-        toggle = False
-        if toggle ^ (not a.permissions_in(ctx.channel).mention_everyone):
-            # Escape only @everyone/@here
-            what = re.sub(r'@(everyone|here|[!&]?%d})' % ctx.guild.default_role.id, '@\u200b\\1', what)
-            # escape roles mentions if not mentionable
-            for match in re.finditer(r"<@&([0-9]{17,21})>", what):
-                mention_id = int(match.group(1))
-                r: discord.Role = get(ctx.guild.roles, id=mention_id)
-                if not r.mentionable:
-                    what = what.replace(match.group(0), "@\u200b" + r.name)
+        what = remove_mentions_as(ctx.author, ctx.channel, what)
 
         msg = ctx.author.mention + ": " + what
         self.reminders[when] = (ctx.channel.id, msg)

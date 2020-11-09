@@ -252,8 +252,15 @@ class CustomBot(Bot):
 
     async def on_ready(self):
         print("Connected to discord !", datetime.now().ctime())
-
         await self.get_channel(Channels.LOG_CHANNEL).send("Here I am !")
+
+        # total = 0
+        # guild: Guild
+        # for guild in self.guilds:
+        #     total += len(await guild.fetch_members(limit=None).flatten())
+        #
+        # await self.get_channel(Channels.LOG_CHANNEL)\
+        #     .send(f"Here I am !\n\n I am used by {total} cool people in {len(self.guilds)} guilds!")
 
     def __str__(self):
         return f"{self.__class__.__name__}:{hex(id(self.__class__))} obj at {hex(id(self))}"

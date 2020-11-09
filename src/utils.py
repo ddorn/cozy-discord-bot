@@ -7,8 +7,10 @@ from typing import Optional, Union, Type, TYPE_CHECKING
 
 import discord
 import psutil
+from discord import Member, TextChannel
 from discord.ext import commands
 from discord.ext.commands import Bot, Context, NoPrivateMessage
+from discord.utils import get
 
 from src.constants import *
 from src.errors import EplfOnlyError, ConfigUndefined
@@ -51,6 +53,20 @@ def mentions_to_id(s: str) -> str:
     Does not work with plain text mentions like @everyone and @here.
     """
     return re.sub(r"<[@#][&!]?([0-9]{18,21})>", r"\1", s)
+
+
+def remove_mentions_as(member: Member, chan: TextChannel, text: str) -> str:
+    if not member.permissions_in(chan).mention_everyone:
+        # Escape only @everyone/@here
+        text = re.sub(r'@(everyone|here)', '@\u200b\\1', text)
+        # escape roles mentions if not mentionable
+        for match in re.finditer(r"<@&([0-9]{17,21})>", text):
+            mention_id = int(match.group(1))
+            r: discord.Role = get(chan.guild.roles, id=mention_id)
+            if r and not r.mentionable:
+                text = text.replace(match.group(0), "@\u200b" + r.name)
+
+    return text
 
 
 def get_casefold(seq, **attrs):

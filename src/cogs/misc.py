@@ -17,7 +17,7 @@ from typing import List
 
 import aiohttp
 import discord
-from discord import Guild, Member, TextChannel, ChannelType, GroupChannel, VoiceChannel, CategoryChannel
+from discord import AllowedMentions, ChannelType, Guild, Member, TextChannel
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import (Cog, command, Command, CommandError, Context, Group, guild_only)
@@ -25,9 +25,9 @@ from discord.utils import get
 
 from src.cogs.perms import RuleSet
 from src.constants import *
-from src.core import CustomBot
+from src.core import CustomBot, CustomCog, CogConfig
 from src.errors import EpflError
-from src.utils import mentions_to_id, myembed, section, start_time, with_max_len, french_join
+from src.utils import french_join, mentions_to_id, myembed, section, start_time, with_max_len
 
 # supported operators
 OPS = {
@@ -42,9 +42,13 @@ for name in dir(math):
     if not name.startswith("_"):
         OPS[name] = getattr(math, name)
 
-class MiscCog(Cog, name="Divers"):
+
+class MiscCog(CustomCog, name="Divers"):
+    class Config(CogConfig):
+        fractals_generated: int = 0
+
     def __init__(self, bot: CustomBot):
-        self.bot = bot
+        super().__init__(bot)
         self.show_hidden = False
         self.verify_checks = True
         self.computing = False  # Fractal
@@ -68,7 +72,7 @@ class MiscCog(Cog, name="Divers"):
 
     @guild_only()
     @command(name="info", aliases=["status"])
-    async def info_cmd(self, ctx: Context, *, what: str=None):
+    async def info_cmd(self, ctx: Context, *, what: str = None):
         """Affiche des informations à propos du serveur ou de l'argument."""
 
         if what is None:
@@ -146,7 +150,7 @@ class MiscCog(Cog, name="Divers"):
             ID=role.id,
             Members=len(role.members),
             # Creation=role.created_at.ctime(),
-            Created=f"{d} day{'s'*(d > 1)} ago",
+            Created=f"{d} day{'s' * (d > 1)} ago",
             Mentionable="Yes" if role.mentionable else "No",
             Position=role.position,
             Auto_condition=rule.with_mentions() if rule is not None else "",
@@ -185,10 +189,10 @@ class MiscCog(Cog, name="Divers"):
             Link=chan.mention if isinstance(chan, TextChannel) else None,
             ID=chan.id,
             Have_access=f"{len(access)} members",
-            Created=f"{crea.days} day{'s'*(crea.days > 1)} ago",
+            Created=f"{crea.days} day{'s' * (crea.days > 1)} ago",
             Authorized=french_join((r.mention
-                                  for r, ov in chan.overwrites.items()
-                                  if isinstance(r, discord.Role) and ov.read_messages), "ou"),
+                                    for r, ov in chan.overwrites.items()
+                                    if isinstance(r, discord.Role) and ov.read_messages), "ou"),
             Auto_condition=rule.with_mentions() if rule is not None else None,
         )
         await ctx.send(embed=embed)
@@ -196,7 +200,7 @@ class MiscCog(Cog, name="Divers"):
     @guild_only()
     @commands.has_role(Role.MODO)
     @command(name="temp-hide", aliases=["th"])
-    async def temp_hide_cmd(self, ctx: Context, duration:int =60):
+    async def temp_hide_cmd(self, ctx: Context, duration: int = 60):
         """
         (modo) Hide the channel for a given time. Useful to prevent pings.
 
@@ -236,11 +240,11 @@ class MiscCog(Cog, name="Divers"):
 
             await ctx.message.add_reaction(Emoji.CHECK)
             msg: discord.Message = ctx.message
-            seed = msg.content[len("!fractal ") :]
+            seed = msg.content[len("!fractal "):]
             seed = seed or str(random.randint(0, 1_000_000_000))
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    FRACTAL_URL.format(seed=urllib.parse.quote(seed)), timeout=120
+                        FRACTAL_URL.format(seed=urllib.parse.quote(seed)), timeout=120
                 ) as resp:
                     if resp.status != 200:
                         print(resp)
@@ -248,9 +252,17 @@ class MiscCog(Cog, name="Divers"):
                             "Il y a un problème pour calculer/télécharger l'image..."
                         )
                     data = io.BytesIO(await resp.read())
+
+                    # seed_escaped = remove_mentions_as(ctx.author, ctx.channel, seed)
                     await ctx.send(
-                        f"Seed: {seed}", file=discord.File(data, f"{seed}.png")
+                        f"Seed: {seed}", file=discord.File(data, "fractal.png"),
+                        allowed_mentions=AllowedMentions.none(),
                     )
+
+                    if ctx.guild:
+                        conf: MiscCog.Config
+                        with self.config(ctx.guild) as conf:
+                            conf.fractals_generated += 1
         finally:
             self.computing = False
 
@@ -267,7 +279,7 @@ class MiscCog(Cog, name="Divers"):
 
         delta = pong - ping
 
-        await msg.edit(content=rep+f" Ça a pris {int(1000 * (delta))}ms")
+        await msg.edit(content=rep + f" Ça a pris {int(1000 * (delta))}ms")
 
     # ---------------- Calc ----------------- #
 
@@ -352,7 +364,8 @@ class MiscCog(Cog, name="Divers"):
             return OPS[type(node.op)](self._eval(node.operand))
         elif isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name):
-                return OPS[node.func.id](*(self._eval(n) for n in node.args), **{k.arg: self._eval(k.value) for k in node.keywords})
+                return OPS[node.func.id](*(self._eval(n) for n in node.args),
+                                         **{k.arg: self._eval(k.value) for k in node.keywords})
         elif isinstance(node, ast.Name):
             return OPS[node.id]
 
@@ -378,9 +391,9 @@ class MiscCog(Cog, name="Divers"):
         embed = discord.Embed(
             title="Aide pour EPFL-bot",
             description="Voici une liste des commandes utiles (ou pas) "
-            "sur ce serveur. Pour avoir plus de détails il "
-            "suffit d'écrire `!help COMMANDE` en remplacant `COMMANDE` "
-            "par le nom de la commande, par exemple `!help help`.",
+                        "sur ce serveur. Pour avoir plus de détails il "
+                        "suffit d'écrire `!help COMMANDE` en remplacant `COMMANDE` "
+                        "par le nom de la commande, par exemple `!help help`.",
             color=EMBED_COLOR,
         )
 
@@ -477,9 +490,9 @@ class MiscCog(Cog, name="Divers"):
             embed.add_field(
                 name="Plus d'aide",
                 value=f"Pour plus de détails sur une commande, "
-                f"il faut écrire `!help COMMANDE` en remplaçant "
-                f"COMMANDE par le nom de la commande qui t'intéresse.\n"
-                f"Exemple: `!help {random.choice(names)[1:]}`",
+                      f"il faut écrire `!help COMMANDE` en remplaçant "
+                      f"COMMANDE par le nom de la commande qui t'intéresse.\n"
+                      f"Exemple: `!help {random.choice(names)[1:]}`",
             )
         embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
 
