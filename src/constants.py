@@ -6,6 +6,7 @@ __all__ = [
     "Role",
     "Channels",
     "OWNER",
+    "DIEGO_MENTION",
     "BOT",
     "EMBED_COLOR",
     "FRACTAL_URL",
@@ -32,6 +33,7 @@ if DISCORD_TOKEN is None:
 
 OWNER = 430566197868625920  # Diego's id
 BOT = 753577454341455882
+DIEGO_MENTION = f"<@{OWNER}>"
 
 EPFL_GUILD = 721376511734710383  # Official EPFL guild id
 PASSE_PARTOUT_ROLE = 769480338594332702

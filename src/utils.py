@@ -7,9 +7,9 @@ from typing import Optional, Union, Type, TYPE_CHECKING
 
 import discord
 import psutil
-from discord import Member, TextChannel
+from discord import Guild, Member, TextChannel
 from discord.ext import commands
-from discord.ext.commands import Bot, Context, NoPrivateMessage
+from discord.ext.commands import Bot, Context, MissingRole, NoPrivateMessage
 from discord.utils import get
 
 from src.constants import *
@@ -240,6 +240,28 @@ def official_guild():
     def predicate(ctx: Context):
         if ctx.guild is None or ctx.guild.id != EPFL_GUILD:
             raise EplfOnlyError()
+        return True
+
+    return commands.check(predicate)
+
+
+def check_role(item):
+
+    def predicate(ctx: Context):
+
+        if not isinstance(ctx.channel, discord.abc.GuildChannel):
+            raise NoPrivateMessage()
+
+        if ctx.author == ctx.guild.owner:
+            return True
+
+        if isinstance(item, int):
+            role = get(ctx.author.roles, id=item)
+        else:
+            role = get(ctx.author.roles, name=item)
+
+        if role is None:
+            raise MissingRole(item)
         return True
 
     return commands.check(predicate)

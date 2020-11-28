@@ -402,13 +402,25 @@ class PermsCog(CustomCog, name="Permissions"):
         # Si tu critiques, je veux bien une plus jolie façon de faire ça.
         fields = ""
         for role, rule in self.rules.roles(ctx.guild):
-            fields += f"{role.mention}: {rule.with_mentions()}\n"
+            r = f"{role.mention}: {rule.with_mentions()}\n"
+
+            if len(fields) + len(r) >= 1024:
+                embed.add_field(name="Roles", value=fields, inline=False)
+                fields = ""
+            fields += r
+
         if fields:
             embed.add_field(name="Roles", value=fields, inline=False)
 
         fields = ""
         for chan, rule in self.rules.channels(ctx.guild):
-            fields += f"{chan.mention}: {rule.with_mentions()}\n"
+            r = f"{chan.mention}: {rule.with_mentions()}\n"
+
+            if len(fields) + len(r) >= 1024:
+                embed.add_field(name="Salons", value=fields, inline=False)
+                fields = ""
+            fields += r
+
         if fields:
             embed.add_field(name="Salons", value=fields, inline=False)
 

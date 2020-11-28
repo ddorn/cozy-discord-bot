@@ -1,5 +1,6 @@
 from discord.ext.commands import Context, command, has_role
 
+from src.converters import to_nice
 from src.core import CustomCog, CustomBot
 from src.constants import *
 from src.errors import EpflError
@@ -60,7 +61,8 @@ class SettingsCog(CustomCog, name="Settings"):
                 raise EpflError(f"{cog_name} n'a pas de réglage {setting}. "
                                 f"`!settings` done une liste des possibilités.")
 
-            conf[setting] = value
+            nice = to_nice(value, conf.type_of(setting), ctx.guild)
+            conf[setting] = nice
 
         await ctx.message.add_reaction(Emoji.CHECK)
 

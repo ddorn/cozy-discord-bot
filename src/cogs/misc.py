@@ -21,13 +21,13 @@ from discord import AllowedMentions, ChannelType, Guild, Member, TextChannel
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import (Cog, command, Command, CommandError, Context, Group, guild_only)
-from discord.utils import get
+from discord.utils import get, find
 
 from src.cogs.perms import RuleSet
 from src.constants import *
 from src.core import CustomBot, CustomCog, CogConfig
 from src.errors import EpflError
-from src.utils import french_join, mentions_to_id, myembed, section, start_time, with_max_len
+from src.utils import french_join, mentions_to_id, myembed, section, start_time, with_max_len, official_guild
 
 # supported operators
 OPS = {
@@ -81,6 +81,18 @@ class MiscCog(CustomCog, name="Divers"):
         guild: Guild = ctx.guild
         what_ = what
         what = what.strip()
+
+        # Special cases
+        if what in ("ici", "here"):
+            return await self.send_channel_info(ctx, ctx.channel)
+        if what in ("me", "moi"):
+            return await self.send_member_info(ctx, ctx.author)
+
+        # Emojis first
+        emoji = get(ctx.guild.emojis, name=what) or \
+                find(lambda e: str(e) == what or e.name.casefold() == what.casefold(), ctx.guild.emojis)
+        if emoji:
+            return await self.send_emoji_info(ctx, emoji)
 
         # try to convert it to an id
         what = mentions_to_id(what)
@@ -162,8 +174,10 @@ class MiscCog(CustomCog, name="Divers"):
 
         member_since = datetime.datetime.now() - member.joined_at
 
+        title = f"Info pour {member.display_name}"
+
         embed = myembed(
-            f"Info pour {member.display_name}",
+            title,
             "",
             member.color,
             Mention=member.mention,
@@ -173,6 +187,8 @@ class MiscCog(CustomCog, name="Divers"):
             Booster_since=member.premium_since,
             _Roles=french_join(r.mention for r in reversed(member.roles[1:])),
         )
+
+        embed.set_thumbnail(url=member.avatar_url)
 
         await ctx.send(embed=embed)
 
@@ -195,6 +211,33 @@ class MiscCog(CustomCog, name="Divers"):
                                     if isinstance(r, discord.Role) and ov.read_messages), "ou"),
             Auto_condition=rule.with_mentions() if rule is not None else None,
         )
+
+        access.sort(key=lambda x: (-x.top_role.position, x.display_name))
+        access = " ".join([m.mention for m in access if not m.bot]) + " + bots"
+        if len(access) <= 1024:
+            embed.add_field(name="Members", value=access)
+
+        await ctx.send(embed=embed)
+
+    async def send_emoji_info(self, ctx: Context, emoji: discord.Emoji):
+
+        # Author can only be retreived this way
+        emoji = await ctx.guild.fetch_emoji(emoji.id)
+
+        created = datetime.datetime.now() - emoji.created_at
+
+        embed = myembed(
+            f"Info pour {str(emoji)}",
+            "",
+            Added=f"{created.days} day{'s' * (created.days > 1)} ago",
+            Added_by=emoji.user.mention,
+            ID=emoji.id,
+            Mention=f"`{str(emoji)}`",
+            Link=emoji.url,
+        )
+
+        embed.set_image(url=emoji.url)
+
         await ctx.send(embed=embed)
 
     @guild_only()
@@ -554,6 +597,15 @@ class MiscCog(CustomCog, name="Divers"):
         if sort:
             ret.sort(key=key)
         return ret
+
+    @command(name="Diego", hidden=True)
+    async def diego_cmd(self, ctx):
+        msg = "C'est mon papa ! :smiling_face_with_3_hearts:"
+
+        if random.random() < 0.05:
+            msg += "  (et il est célibataire <:pandange:776504246337798145>)"
+
+        await ctx.send(msg)
 
 
 def setup(bot: CustomBot):

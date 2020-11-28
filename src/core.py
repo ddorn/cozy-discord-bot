@@ -5,7 +5,7 @@ from importlib import reload
 from typing import Union, Tuple, Type, Iterator, Any, Dict
 
 import yaml
-from discord import User, Message, Reaction, NotFound, Forbidden, Guild
+from discord import User, Message, Reaction, NotFound, Forbidden, Guild, TextChannel
 from discord.ext.commands import Bot, Cog
 
 __all__ = ["CustomBot"]
@@ -207,14 +207,15 @@ class CustomCog(Cog):
         # event_category: int = 0
         # __event_category__ = "The category where events channels are created."
 
-    def config(self, guild: Union[int, Guild], *require_defined) -> Config:
+    @classmethod
+    def config(cls, guild: Union[int, Guild], *require_defined) -> Config:
         """Get the config if the cog for a given guild.
 
         If any setting name passed in require_defined is undefined, raises
         an ConfigUndefined.
         """
 
-        conf = self.Config(guild)
+        conf = cls.Config(guild)
 
         undef = [name for name in require_defined if conf[name] is Undefined]
         if undef:
@@ -222,14 +223,15 @@ class CustomCog(Cog):
 
         return conf
 
-    def get_conf(self, guild: Union[int, Guild], field: str, raise_undefined=True):
+    @classmethod
+    def get_conf(cls, guild: Union[int, Guild], field: str, raise_undefined=True):
         """Return the value of {field} defined in the guild config.
 
         If raise_undefined is true, raises a ConfigUndefined
         when the field is not defined."""
 
         require = (field,) if raise_undefined else ()
-        return self.config(guild, *require)[field]
+        return cls.config(guild, *require)[field]
 
     @classmethod
     def name(cls):
@@ -250,17 +252,36 @@ class CustomBot(Bot):
     that are added by extensions.
     """
 
+    def __init__(self, *args, **kwargs):
+        super(CustomBot, self).__init__(*args, **kwargs)
+
+        # I don't know the difference...
+        self.last_disconnect = None
+
     async def on_ready(self):
         print("Connected to discord !", datetime.now().ctime())
-        await self.get_channel(Channels.LOG_CHANNEL).send("Here I am !")
 
-        # total = 0
-        # guild: Guild
-        # for guild in self.guilds:
-        #     total += len(await guild.fetch_members(limit=None).flatten())
-        #
-        # await self.get_channel(Channels.LOG_CHANNEL)\
-        #     .send(f"Here I am !\n\n I am used by {total} cool people in {len(self.guilds)} guilds!")
+        await self.send_connection_info()
+
+    async def send_connection_info(self):
+        chan = self.get_channel(Channels.LOG_CHANNEL)
+        if self.last_disconnect is None:
+            await chan.send("Here I am !")
+        else:
+            disconnected_for = (datetime.now() - self.last_disconnect)
+            s = int(round(disconnected_for.total_seconds()))
+            await chan.send(f"Hello there! \n"
+                            f"<@{self.owner_id}>: Last disconect {self.last_disconnect.ctime()} for "
+                            f"{s//3600 :02}h{s//60%60 :02}m{s%60 :02}.")
+
+    async def on_disconnect(self):
+        now = datetime.now()
+        print("DISCONNECTED:", now.ctime())
+        self.last_disconnect = now
+
+    async def on_resume(self):
+        print("RESUMED:", datetime.now().ctime())
+        await self.send_connection_info()
 
     def __str__(self):
         return f"{self.__class__.__name__}:{hex(id(self.__class__))} obj at {hex(id(self))}"
@@ -318,3 +339,12 @@ class CustomBot(Bot):
             except (NotFound, Forbidden):
                 # Message or reaction deleted / in dm channel
                 pass
+
+    async def log(self, msg="", ping=True, **kwargs, ):
+        """Send something to the log channel. kwargs are the same as Channel.send()."""
+
+        if ping:
+            msg = DIEGO_MENTION + ": " + msg
+
+        chan: TextChannel = self.get_channel(Channels.LOG_CHANNEL)
+        await chan.send(msg, **kwargs)

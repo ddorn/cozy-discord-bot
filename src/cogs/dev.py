@@ -29,11 +29,13 @@ COGS_SHORTCUTS = {
     "c": "src.constants",
     "d": "dev",
     "e": "epfl",
+    "en": "enigma",
     "m": "misc",
     "o": "orga",
     "p": "perms",
     "r": "errors",
     "re": "remind",
+    "ro": "rooms",
     "s": "settings",
     "u": "src.utils",
     "v": "dev",
@@ -123,7 +125,7 @@ class DevCog(Cog, name="Dev tools"):
                     working += 1
             msg = f":tada: The bot was reloaded ! With {working} extensions."
             if failed:
-                msg += "But " + french_join(failed, "and") + " failed."
+                msg += " But " + french_join(failed, "and") + " failed."
             await ctx.send(msg)
             if last_ex:
                 raise last_ex
