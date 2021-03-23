@@ -17,7 +17,7 @@ from typing import List
 
 import aiohttp
 import discord
-from discord import AllowedMentions, ChannelType, Guild, Member, TextChannel
+from discord import AllowedMentions, ChannelType, Guild, Member, PermissionOverwrite, Permissions, TextChannel
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import (Cog, command, Command, CommandError, Context, Group, guild_only)
@@ -271,6 +271,44 @@ class MiscCog(CustomCog, name="Divers"):
             await chan.set_permissions(ctx.author, overwrite=None)
             for p, perm in perms.items():
                 await chan.set_permissions(p, overwrite=perm)
+
+    @guild_only()
+    @commands.has_role(Role.MODO)
+    @command(name="freeze")
+    async def freeze_cmd(self, ctx: Context, duration: int = 60):
+        """
+        (modo) Prevent anyone to write in the channel for a given time.
+
+        The channel is hidden for a default of 60s and can be made visible
+        again earlier by deleting the `!temp-hide` message.
+
+        Works only on channels with less than 10 permissions.
+        """
+
+        chan: GuildChannel = ctx.channel
+        perms = chan.overwrites
+
+        if len(perms) > 10:
+            raise EpflError("Cannot hide a channel with more than 10 permissions.")
+
+        await ctx.message.delete()
+        msg = await ctx.channel.send(embed=myembed(
+            f'This channel has been frozen for {duration} seconds.'
+        ))
+        await self.bot.info('Channel frozen',
+                           f'Channel {ctx.channel.mention} has been frozen by {ctx.author.mention} for {duration} seconds.')
+
+        try:
+            for who, perm in perms.items():
+                new = PermissionOverwrite(**dict(iter(perm)))
+                new.send_messages = False
+                await chan.set_permissions(who, overwrite=new)
+
+            await self.bot.wait_for_bin(ctx.author, msg, timeout=duration)
+        finally:
+            for who, perm in perms.items():
+                await chan.set_permissions(who, overwrite=perm)
+
 
     @command(hidden=True)
     async def fractal(self, ctx: Context):

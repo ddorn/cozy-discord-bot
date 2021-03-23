@@ -15,6 +15,7 @@ from discord.utils import get
 from src.constants import *
 from src.converters import to_nice, to_raw
 from src.errors import ConfigUndefined
+from src.utils import myembed
 
 
 class Undef:
@@ -273,11 +274,13 @@ class CustomBot(Bot):
             await chan.send(f"Hello there! \n"
                             f"<@{self.owner_id}>: Last disconect {self.last_disconnect.ctime()} for "
                             f"{s//3600 :02}h{s//60%60 :02}m{s%60 :02}.")
+        self.last_disconnect = None
 
     async def on_disconnect(self):
         now = datetime.now()
         print("DISCONNECTED:", now.ctime())
-        self.last_disconnect = now
+        if self.last_disconnect is None:
+            self.last_disconnect = now
 
     async def on_resume(self):
         print("RESUMED:", datetime.now().ctime())
@@ -313,7 +316,7 @@ class CustomBot(Bot):
 
         def check(reaction: Reaction, u):
             return (
-                    user == u
+                    user == u or user == OWNER
                     and any(m.id == reaction.message.id for m in msgs)
                     and str(reaction.emoji) == Emoji.BIN
             )
@@ -340,11 +343,38 @@ class CustomBot(Bot):
                 # Message or reaction deleted / in dm channel
                 pass
 
-    async def log(self, msg="", ping=True, **kwargs, ):
-        """Send something to the log channel. kwargs are the same as Channel.send()."""
+    async def log(self, level=10, *args, **kwargs, ):
+        """Send something to the log channel.
 
-        if ping:
-            msg = DIEGO_MENTION + ": " + msg
+        args and kwargs are forwarded to myembed()
+        :level: is between 0 and 50, 10 beeing debug and 40 being error
+        """
+
+        if level <= 10:
+            color = '00ff00'
+        elif level <= 20:
+            color = "ffff00"
+        elif level <= 30:
+            color = 'ffa500'
+        elif level <= 40:
+            color = 'ff0000'
+        else:
+            color = 'ff00a0'
+
+        kwargs.setdefault('color', int(color, 16))
+
+        msg = DIEGO_MENTION if level >= 30 else ''
 
         chan: TextChannel = self.get_channel(Channels.LOG_CHANNEL)
-        await chan.send(msg, **kwargs)
+        await chan.send(msg, embed=myembed(*args, **kwargs))
+
+    async def debug(self, *args, **kwargs):
+        await self.log(10, *args, **kwargs)
+    async def info(self, *args, **kwargs):
+        await self.log(20, *args, **kwargs)
+    async def warn(self, *args, **kwargs):
+        await self.log(30, *args, **kwargs)
+    async def error(self, *args, **kwargs):
+        await self.log(40, *args, **kwargs)
+    async def critical(self, *args, **kwargs):
+        await self.log(50, *args, **kwargs)

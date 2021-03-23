@@ -79,8 +79,8 @@ class RoomsCog(CustomCog, name="Private Channels"):
                             "il faut demander à un modo de créer une nouvelle catégorie "
                             f"et la définir dans les réglages. (ping {DIEGO_MENTION})")
         elif nb_in_cat > 47:
-            await self.bot.log(f"Il y a {nb_in_cat} salons dans {cat}. "
-                               f"Pense à changer de catégorie.", ping=True)
+            await self.bot.warn("Salons privés", f"Il y a {nb_in_cat} salons dans {cat}. "
+                               f"Il faut changer de catégorie bientôt.", ping=True)
 
         overwrites = {
             ctx.author: PermissionOverwrite(

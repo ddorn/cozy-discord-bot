@@ -25,7 +25,7 @@ class Team:
 
     @property
     def points(self):
-        return sum(2**int(pb[-1]) for pb in self.solved)
+        return sum(2**int(pb[-1])//2 for pb in set(self.solved))
 
 
 class EnigmaCog(CustomCog):
@@ -50,9 +50,13 @@ class EnigmaCog(CustomCog):
         # await ctx.send()
 
     @enigma.command(name="team", aliases=["new"])
-    @check_role("■ CQFD")
+    @check_role("MA - Mathématiques")
     async def new_team(self, ctx: Context, name: str, *members: Member):
         """Crée une équipe."""
+
+        if len(members) not in (2, 3):
+            await ctx.send(f"{ctx.author.mention}: Les équipes doivent etre composées de 2 ou 3 personnes.")
+            return
 
         guild: Guild = ctx.guild
         conf: EnigmaCog.Config = self.config(guild, "cqfd", "chat_category", "participants")
@@ -97,9 +101,6 @@ class EnigmaCog(CustomCog):
                     solved=[]
                 )
             )
-
-
-
 
         await ctx.send(f"J'ai crée l'équipe {name} et le salon {text.mention} ! Amusez vous bien ;)")
 
@@ -157,13 +158,6 @@ class EnigmaCog(CustomCog):
                            key=attrgetter("points"),
                            reverse=True)
 
-
-
-            msg = "\n".join(
-                f"{t.role.mention}: {t.points}pts"
-                for t in teams
-            )
-
             medals = [
                 ":first_place:",
                 ":second_place:",
@@ -171,8 +165,10 @@ class EnigmaCog(CustomCog):
                 ":military_medal:",
             ]
 
+            nb = sum(len(t.members) for t in teams)
             embed = myembed(
                 "Classement du concours d'énigmes",
+                f"Avec {nb} participants ",
                 0x000000,
             )
 

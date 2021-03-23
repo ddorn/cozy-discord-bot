@@ -9,9 +9,10 @@ from typing import Union
 
 import discord
 from discord import TextChannel, PermissionOverwrite, Message, ChannelType
+from discord.embeds import EmptyEmbed
 from discord.ext.commands import (
     command,
-    has_role,
+    guild_only, has_role,
     Cog,
     ExtensionNotLoaded,
     Context,
@@ -23,7 +24,7 @@ from ptpython.repl import embed
 from src.constants import *
 from src.core import CustomBot
 from src.errors import EpflError
-from src.utils import fg, french_join, send_all, with_max_len, pprint_send, py
+from src.utils import fg, french_join, myembed, send_all, with_max_len, pprint_send, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -86,6 +87,8 @@ class DevCog(Cog, name="Dev tools"):
             pass
 
         await ctx.send("Tout va mieux !")
+
+    # ------------- Extensions -------------- #
 
     def full_cog_name(self, name):
         name = COGS_SHORTCUTS.get(name, name)
@@ -166,12 +169,102 @@ class DevCog(Cog, name="Dev tools"):
         else:
             await ctx.message.add_reaction(Emoji.CHECK)
 
+    # ------------- Send / Del -------------- #
+
     @command(name="send")
     @is_owner()
     async def send_cmd(self, ctx, *msg):
         """(dev) Envoie un message."""
         await ctx.message.delete()
         await ctx.send(" ".join(msg))
+
+    @command(name='embed')
+    @is_owner()
+    async def send_embed(self, ctx: Context):
+        """
+        Send an embed.
+
+        The format of the ember must be the following
+
+        #hexcolor    <-- optional
+        ~url         <-- optional
+        $thumbnail   <-- optional
+        !image url   <-- optional
+        Title
+        Description
+        ---
+        Inline Field title 1
+        Field one text
+        can be multiple lines
+        with some [links](thefractal.space)
+        ---
+        !Fields starting with a ! are not inline
+        but if you add a space before the !, it wil still be
+        ...
+
+        ===          <-- optional
+        Footer text
+        """
+
+        await ctx.message.delete()
+
+        command_length = len(ctx.prefix) + len(ctx.invoked_with) + 1
+        text: str = ctx.message.content[command_length:]
+
+        def get_opt(key, default=EmptyEmbed):
+            nonlocal text
+            if text.startswith(key):
+                value, _, text = text.partition('\n')
+                return value[len(key):].strip()
+            return default
+
+        color = EMBED_COLOR
+        thumbnail = url = image_url = EmptyEmbed
+        show_author = False
+        while text[0] in '#~!$@':
+            t = text[0]
+            if t == '#':
+                color = int(get_opt('#'), 16)
+            elif t == '~':
+                url = get_opt('~')
+            elif t == '!':
+                image_url = get_opt('!')
+            elif t == '$':
+                thumbnail = get_opt('$')
+            elif t == '@':
+                show_author = get_opt('@')
+            else:
+                raise NotImplementedError(f'Not known pattern: {t}')
+
+        title, _, text = text.partition('\n')
+        text, _, footer = text.partition('===\n')
+
+        parts = text.split('---\n')
+        description = parts[0] if parts else None
+
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=color,
+            url=url,
+        )
+
+        embed.set_footer(text=footer)
+        embed.set_image(url=image_url)
+        embed.set_thumbnail(url=thumbnail)
+        if show_author:
+            embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar_url)
+
+        for field in parts[1:]:
+            name, _, value = field.partition('\n')
+            if name.startswith('!'):
+                name = name[1:]
+                inline = False
+            else:
+                inline = True
+            embed.add_field(name=name, value=value, inline=inline)
+
+        await ctx.send(embed=embed)
 
     @command(name="del")
     @has_role(Role.MODO)
@@ -194,6 +287,8 @@ class DevCog(Cog, name="Dev tools"):
                     ] + [id1, id2]
         await channel.delete_messages(to_delete)
         await ctx.message.delete()
+
+    # ---------------- Eval ----------------- #
 
     async def eval(self, msg: Message) -> discord.Embed:
         # Variables for ease of access in eval
@@ -299,6 +394,8 @@ class DevCog(Cog, name="Dev tools"):
         except discord.NotFound:
             pass
 
+    # -------------- Listeners --------------- #
+
     @Cog.listener()
     async def on_message(self, msg: Message):
         ch: TextChannel = msg.channel
@@ -307,6 +404,19 @@ class DevCog(Cog, name="Dev tools"):
 MSG_ID: {fg(msg.id, 0x03A678)}
 CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
             print(m)
+
+    @Cog.listener()
+    async def on_message_delete(self, msg: Message):
+        if msg.role_mentions or msg.mentions:
+            # log all deleted message with mentions,
+            # to avoid ghost pings
+            await self.bot.info(
+                "Deleted message with mention",
+                msg.content,
+                Sent_by=msg.author.mention,
+                At=msg.created_at.ctime(),
+                In=msg.channel.mention,
+            )
 
     @command(name="warn-power", aliases=["wp"])
     @is_owner()

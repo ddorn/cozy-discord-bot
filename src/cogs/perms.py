@@ -170,16 +170,15 @@ class PermsCog(CustomCog, name="Permissions"):
                 title = "Automatic role update log"
 
             s = lambda x: french_join(r.mention for r in x) or "None"
-            await self.bot.get_channel(Channels.LOG_CHANNEL).send(
-                "" if self.modifying[after.id] == 0 else f"<@{OWNER}>",
-                embed=myembed(
-                    title,
-                    after.mention,
-                    _Before=s(sorted(bef, key=attrgetter("position"), reverse=True)),
-                    Diff=s(diff),
-                    Add=s(add),
-                    Rem=s(rem),
-                ))
+            await self.bot.log(
+                10 if self.modifying[after.id] == 0 else 30,
+                title,
+                after.mention,
+                _Before=s(sorted(bef, key=attrgetter("position"), reverse=True)),
+                Diff=s(diff),
+                Add=s(add),
+                Rem=s(rem),
+            )
 
         self.modifying[after.id] += 1
         if self.modifying[after.id] > 1:
