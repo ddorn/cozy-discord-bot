@@ -6,12 +6,15 @@ import discord
 from discord import CategoryChannel, Colour, Guild, Member, PermissionOverwrite, TextChannel, VoiceChannel
 from discord.ext.commands import Context, group, has_role
 from discord.utils import get
+from discord_slash import SlashCommandOptionType, SlashContext
+from discord_slash.cog_ext import cog_slash
+from discord_slash.utils.manage_commands import create_option
 
-from src.constants import Role
+from src.constants import EPFL_GUILD, Role
 from src.converters import ListOf
 from src.core import CogConfig, CustomBot, CustomCog
 from src.errors import EpflError
-from src.utils import check_role, myembed
+from src.utils import check_role, french_join, myembed
 
 
 @dataclass
@@ -25,10 +28,10 @@ class Team:
 
     @property
     def points(self):
-        return sum(2**int(pb[-1])//2 for pb in set(self.solved))
+        return len(self.solved)
 
 
-class EnigmaCog(CustomCog):
+class EnigmaCog(CustomCog, name="Concours d'énigmes"):
     class Config(CogConfig):
         chat_category: CategoryChannel
         __chat_category__ = "Where team channels are created"
@@ -39,7 +42,6 @@ class EnigmaCog(CustomCog):
         __participants__ = "Role requiered to participate"
 
     @group(name="enigma", aliases=["en"], invoke_without_command=True, hidden=True)
-    @check_role("MA - Mathématiques")
     async def enigma(self, ctx: Context):
 
         embed = myembed(
@@ -49,18 +51,35 @@ class EnigmaCog(CustomCog):
 
         # await ctx.send()
 
-    @enigma.command(name="team", aliases=["new"])
-    @check_role("MA - Mathématiques")
-    async def new_team(self, ctx: Context, name: str, *members: Member):
+    # @enigma.command(name="team", aliases=["new"])
+    # @check_role("MA - Mathématiques")
+    @cog_slash(name='enigma-new', description="Create a new team for CQFD's enigma contest.",
+               guild_ids=[EPFL_GUILD], options=[
+            create_option('name', 'Name of the team.', SlashCommandOptionType.STRING, True),
+            create_option('member_1', 'First member of the team.', SlashCommandOptionType.USER, True),
+            create_option('member_2', 'Second member of the team.', SlashCommandOptionType.USER, True),
+            create_option('member_3', 'Optional third member of the team.', SlashCommandOptionType.USER, False),
+        ])
+    async def new_team(self, ctx: SlashContext, name, member_1, member_2, member_3=None):
         """Crée une équipe."""
 
-        if len(members) not in (2, 3):
-            await ctx.send(f"{ctx.author.mention}: Les équipes doivent etre composées de 2 ou 3 personnes.")
+        await ctx.respond()
+
+        members = [member_1, member_2]
+        if member_3:
+            members.append(member_3)
+
+        if len(set(members)) < len(members):
+            await ctx.send('Every member must be different.')
             return
 
         guild: Guild = ctx.guild
         conf: EnigmaCog.Config = self.config(guild, "cqfd", "chat_category", "participants")
 
+
+        if any(team.name == name for team in conf.teams):
+            await ctx.send("Ce nom est déjà pris !")
+            return
 
         # Create the role
         role = await guild.create_role(
@@ -89,6 +108,9 @@ class EnigmaCog(CustomCog):
             name, overwrites=perms
         )
 
+        # Let the see the category Channels
+        await conf.chat_category.set_permissions(role, view_channel=True)
+
         # Save everything
         with self.config(ctx.guild) as conf:
             conf.teams.append(
@@ -102,7 +124,7 @@ class EnigmaCog(CustomCog):
                 )
             )
 
-        await ctx.send(f"J'ai crée l'équipe {name} et le salon {text.mention} ! Amusez vous bien ;)")
+        await ctx.send(f"J'ai créé l'équipe {name} et le salon {text.mention} ! Amusez vous bien {french_join([m.mention for m in members])};)")
 
     @enigma.command(name="del")
     @check_role("■ CQFD")
@@ -127,7 +149,7 @@ class EnigmaCog(CustomCog):
 
     @enigma.command(name="done", aliases=["solve", "points"])
     @check_role("■ CQFD")
-    async def solve(self, ctx: Context, team: discord.Role, problem: str):
+    async def solve(self, ctx: Context, team: discord.Role, problem: int):
         """Marque un problème comme résolu."""
         conf: EnigmaCog.Config
         with self.config(ctx.guild) as conf:
@@ -136,20 +158,16 @@ class EnigmaCog(CustomCog):
             if the_team is None:
                 raise EpflError("Not a valid team.")
 
-            cat = problem[:2]
-            nb = problem[2:]
-
-            if nb not in "123" or cat.lower() not in ("an", "al", "lo", "ma"):
-                raise EpflError("The problem must be two two letters, either AN, AL, LO or MA"
-                                "followed by the digit.")
+            if problem not in range(12):
+                raise EpflError(f"The problem must be an integer between 0 and 12, not {problem}")
 
             the_team.solved.append(problem)
             await ctx.send(
                 f"L'équipe {team.mention} a désormais {the_team.points} pts !"
             )
 
-    @enigma.command(name="leaderboard", aliases=["l"])
-    @check_role("MA - Mathématiques")
+    # @enigma.command(name="leaderboard", aliases=["l"])
+    @cog_slash(name='enigma-leaderboard', description='Current points of each team.', guild_ids=[EPFL_GUILD])
     async def leaderboard(self, ctx: Context):
         """Classement du concours d'énigmes."""
 

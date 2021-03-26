@@ -19,6 +19,10 @@ from discord.ext.commands import (
     is_owner,
     ExtensionFailed)
 from discord.utils import get
+from discord_slash import SlashContext
+from discord_slash.cog_ext import cog_slash
+from discord_slash.utils.manage_commands import create_option
+from discord_slash.model import SlashCommandOptionType as OType
 from ptpython.repl import embed
 
 from src.constants import *
@@ -87,6 +91,10 @@ class DevCog(Cog, name="Dev tools"):
             pass
 
         await ctx.send("Tout va mieux !")
+
+    @command()
+    async def reboot(self, ctx):
+        raise SystemExit()
 
     # ------------- Extensions -------------- #
 
@@ -185,7 +193,7 @@ class DevCog(Cog, name="Dev tools"):
         Send an embed.
 
         The format of the ember must be the following
-
+        ```
         #hexcolor    <-- optional
         ~url         <-- optional
         $thumbnail   <-- optional
@@ -204,9 +212,9 @@ class DevCog(Cog, name="Dev tools"):
 
         ===          <-- optional
         Footer text
+        ```
         """
 
-        await ctx.message.delete()
 
         command_length = len(ctx.prefix) + len(ctx.invoked_with) + 1
         text: str = ctx.message.content[command_length:]
@@ -221,7 +229,8 @@ class DevCog(Cog, name="Dev tools"):
         color = EMBED_COLOR
         thumbnail = url = image_url = EmptyEmbed
         show_author = False
-        while text[0] in '#~!$@':
+        delete = True
+        while text[0] in '#~!$@x':
             t = text[0]
             if t == '#':
                 color = int(get_opt('#'), 16)
@@ -233,8 +242,13 @@ class DevCog(Cog, name="Dev tools"):
                 thumbnail = get_opt('$')
             elif t == '@':
                 show_author = get_opt('@')
+            elif t == 'x':
+                delete = not get_opt('x')
             else:
                 raise NotImplementedError(f'Not known pattern: {t}')
+
+        if delete:
+            await ctx.message.delete()
 
         title, _, text = text.partition('\n')
         text, _, footer = text.partition('===\n')
@@ -265,6 +279,24 @@ class DevCog(Cog, name="Dev tools"):
             embed.add_field(name=name, value=value, inline=inline)
 
         await ctx.send(embed=embed)
+
+    @command(name='reply')
+    @is_owner()
+    async def reply(self, ctx, channel: TextChannel, *msg):
+        """(dev) Envoie un message dans n'importe quel salon.
+
+        Ne supprime pas le message original."""
+
+        await channel.send(' '.join(msg))
+
+    @command(name='send-to')
+    @is_owner()
+    async def send_to_cmd(self, ctx, who: discord.User, *msg):
+        """(dev) Envoie un message privé à n'importe utilisateur.
+
+        Ne supprime pas le message original."""
+
+        await who.send(' '.join(msg))
 
     @command(name="del")
     @has_role(Role.MODO)
@@ -404,6 +436,16 @@ class DevCog(Cog, name="Dev tools"):
 MSG_ID: {fg(msg.id, 0x03A678)}
 CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
             print(m)
+
+            # Log recieved messages
+            if msg.author.id != self.bot.user.id:
+                await self.bot.info(
+                    "Private Message",
+                    msg.content,
+                    From=msg.author.mention,
+                    Message_ID=msg.id,
+                    Channel_ID=msg.channel.id,
+                )
 
     @Cog.listener()
     async def on_message_delete(self, msg: Message):

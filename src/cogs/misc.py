@@ -22,6 +22,9 @@ from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import (Cog, command, Command, CommandError, Context, Group, guild_only)
 from discord.utils import get, find
+from discord_slash import SlashCommandOptionType, SlashContext
+from discord_slash.cog_ext import cog_slash
+from discord_slash.utils.manage_commands import create_option
 
 from src.cogs.perms import RuleSet
 from src.constants import *
@@ -310,18 +313,29 @@ class MiscCog(CustomCog, name="Divers"):
                 await chan.set_permissions(who, overwrite=perm)
 
 
-    @command(hidden=True)
-    async def fractal(self, ctx: Context):
+    @cog_slash(
+        name='fractal',
+        description='Genère une fractale aléatoire',
+        options=[
+            create_option(
+                'seed', 'La graine pour générer la fractale',
+                SlashCommandOptionType.STRING, False,
+            )
+        ],
+    )
+    async def fractal(self, ctx: SlashContext, seed=None):
         """Dessine une fractale aléatoire."""
+
         if self.computing:
             return await ctx.send("Il y a déjà une fractale en cours de calcul...")
 
         try:
             self.computing = True
 
-            await ctx.message.add_reaction(Emoji.CHECK)
-            msg: discord.Message = ctx.message
-            seed = msg.content[len("!fractal "):]
+            await ctx.respond()
+
+            # msg: discord.Message = ctx.message
+            # seed = msg.content[len("!fractal "):]
             seed = seed or str(random.randint(0, 1_000_000_000))
             async with aiohttp.ClientSession() as session:
                 async with session.get(
