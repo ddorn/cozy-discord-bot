@@ -6,6 +6,8 @@
     based on other roles
 - Full interactive interpreter for the owner
 - Full bot reloading, including the bot class itself
+- Complex and automatic persistent storage for Cogs settings and data
+- Per-guild cogs settings modifiable with commands
 - Hugs between members with statistcs
 - Simple calculations
 - Fractal generation
