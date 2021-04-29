@@ -1,15 +1,32 @@
-# Cozy Discord Bot
+# Cozy's Discord Bot
 
-Doesn't do much yet, except run an interpreter for the owner.
-To see an interesting bot, got to [tfjm-discord-bot](https://gitlab.com/ddorn/tfjm-discord-bot)
+### Features
+
+- Dynamically assign roles and individual channel permissions 
+    based on other roles
+- Full interactive interpreter for the owner
+- Full bot reloading, including the bot class itself
+- Hugs between members with statistcs
+- Simple calculations
+- Fractal generation
+- Custom automatic help system
+- Setup reminders
+- Jokes system were people can add jokes, up/downvote them 
+    and send random jokes
+- Simple moderation tools:
+    - Delete a range of messages
+    - freeze a channel for a given time
+    - hide a channel for a given time
+    - send private messages via the bot
+    - send embed with every parameter customisable
 
 ### Install and run
 
 One needs poetry to install the dependencies easily.
 
-```sh
+```shell script
 poetry install
-poetry run python bot.py
+DISCORD_TOKEN=xxxxxx poetry run python .
 ```
 
 ##### Nix and direnv
