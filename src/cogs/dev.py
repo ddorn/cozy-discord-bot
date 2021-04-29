@@ -16,11 +16,12 @@ from discord.ext.commands import (
     ExtensionNotLoaded,
     Context,
     is_owner,
-    ExtensionFailed)
+    ExtensionFailed,
+)
 from ptpython.repl import embed
 
 from src.constants import *
-from engine import CustomBot, EpflError, fg, french_join, send_all, with_max_len, py
+from engine import CustomBot, CozyError, fg, french_join, send_all, with_max_len, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -39,7 +40,10 @@ COGS_SHORTCUTS = {
 }
 
 RE_QUERY = re.compile(
-    r"^" + PREFIX + " ?e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$", re.DOTALL
+    r"^"
+    + PREFIX
+    + " ?e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$",
+    re.DOTALL,
 )
 
 
@@ -47,7 +51,6 @@ class DevCog(Cog, name="Dev tools"):
     def __init__(self, bot: CustomBot):
         self.bot = bot
         self.eval_locals = {}
-        self.power_warn_on = False
 
     @command(name="interrupt")
     @is_owner()
@@ -85,7 +88,8 @@ class DevCog(Cog, name="Dev tools"):
         await ctx.send("Tout va mieux !")
 
     @command()
-    async def reboot(self, ctx):
+    async def byebye(self, ctx):
+        """Exit the bot."""
         raise SystemExit()
 
     # ------------- Extensions -------------- #
@@ -137,9 +141,6 @@ class DevCog(Cog, name="Dev tools"):
         for name in names:
             name = self.full_cog_name(name)
 
-            if name == "src.cogs.dev":
-                self.power_warn_on = False  # Shut it down
-
             try:
                 self.bot.reload_extension(name)
             except ExtensionNotLoaded:
@@ -169,149 +170,6 @@ class DevCog(Cog, name="Dev tools"):
         else:
             await ctx.message.add_reaction(Emoji.CHECK)
 
-    # ------------- Send / Del -------------- #
-
-    @command(name="send")
-    @is_owner()
-    async def send_cmd(self, ctx, *msg):
-        """(dev) Envoie un message."""
-        await ctx.message.delete()
-        await ctx.send(" ".join(msg))
-
-    @command(name='embed')
-    @is_owner()
-    async def send_embed(self, ctx: Context):
-        """
-        Send an embed.
-
-        The format of the ember must be the following
-        ```
-        #hexcolor    <-- optional
-        ~url         <-- optional
-        $thumbnail   <-- optional
-        !image url   <-- optional
-        Title
-        Description
-        ---
-        Inline Field title 1
-        Field one text
-        can be multiple lines
-        with some [links](thefractal.space)
-        ---
-        !Fields starting with a ! are not inline
-        but if you add a space before the !, it wil still be
-        ...
-
-        ===          <-- optional
-        Footer text
-        ```
-        """
-
-
-        command_length = len(ctx.prefix) + len(ctx.invoked_with) + 1
-        text: str = ctx.message.content[command_length:]
-
-        def get_opt(key, default=EmptyEmbed):
-            nonlocal text
-            if text.startswith(key):
-                value, _, text = text.partition('\n')
-                return value[len(key):].strip()
-            return default
-
-        color = EMBED_COLOR
-        thumbnail = url = image_url = EmptyEmbed
-        show_author = False
-        delete = True
-        while text[0] in '#~!$@x':
-            t = text[0]
-            if t == '#':
-                color = int(get_opt('#'), 16)
-            elif t == '~':
-                url = get_opt('~')
-            elif t == '!':
-                image_url = get_opt('!')
-            elif t == '$':
-                thumbnail = get_opt('$')
-            elif t == '@':
-                show_author = get_opt('@')
-            elif t == 'x':
-                delete = not get_opt('x')
-            else:
-                raise NotImplementedError(f'Not known pattern: {t}')
-
-        if delete:
-            await ctx.message.delete()
-
-        title, _, text = text.partition('\n')
-        text, _, footer = text.partition('===\n')
-
-        parts = text.split('---\n')
-        description = parts[0] if parts else None
-
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=color,
-            url=url,
-        )
-
-        embed.set_footer(text=footer)
-        embed.set_image(url=image_url)
-        embed.set_thumbnail(url=thumbnail)
-        if show_author:
-            embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar_url)
-
-        for field in parts[1:]:
-            name, _, value = field.partition('\n')
-            if name.startswith('!'):
-                name = name[1:]
-                inline = False
-            else:
-                inline = True
-            embed.add_field(name=name, value=value, inline=inline)
-
-        await ctx.send(embed=embed)
-
-    @command(name='reply')
-    @is_owner()
-    async def reply(self, ctx, channel: TextChannel, *msg):
-        """(dev) Envoie un message dans n'importe quel salon.
-
-        Ne supprime pas le message original."""
-
-        await channel.send(' '.join(msg))
-
-    @command(name='send-to')
-    @is_owner()
-    async def send_to_cmd(self, ctx, who: discord.User, *msg):
-        """(dev) Envoie un message privé à n'importe utilisateur.
-
-        Ne supprime pas le message original."""
-
-        await who.send(' '.join(msg))
-
-    @command(name="del")
-    @has_role(Role.MODO)
-    async def del_range_cmd(self, ctx: Context, id1: Message, id2: Message):
-        """
-        (modo) Supprime les messages entre les deux IDs en argument.
-
-        Pour optenir les IDs des messages il faut activer le mode developpeur
-        puis clic droit > copier l'ID.
-
-        `id1` est le message le plus récent à supprimer.
-        `id2` est le message le plus ancien.
-
-        Il est impossible de supprimer plus de 100 messages d'un coup.
-        """
-
-        channel: TextChannel = id1.channel
-        to_delete = [
-                        message async for message in channel.history(before=id1, after=id2)
-                    ] + [id1, id2]
-        await channel.delete_messages(to_delete)
-        await ctx.message.delete()
-
     # ---------------- Eval ----------------- #
 
     async def eval(self, msg: Message) -> discord.Embed:
@@ -327,14 +185,14 @@ class DevCog(Cog, name="Dev tools"):
         query = re.match(RE_QUERY, msg.content).group("query")
 
         if not query:
-            raise EpflError("No query found.")
+            raise CozyError("No query found.")
 
         if any(word in query for word in ("=", "return", "await", ":", "\n")):
             lines = query.splitlines()
             if (
-                    "return" not in lines[-1]
-                    and "=" not in lines[-1]
-                    and not lines[-1].startswith(" ")
+                "return" not in lines[-1]
+                and "=" not in lines[-1]
+                and not lines[-1].startswith(" ")
             ):
                 lines[-1] = f"return {lines[-1]}"
                 query = "\n".join(lines)
@@ -366,9 +224,7 @@ class DevCog(Cog, name="Dev tools"):
             embed.add_field(
                 name="Query", value=py(with_max_len(full_query)), inline=False
             )
-            embed.add_field(
-                name="Traceback", value=py(with_max_len(tb)), inline=False
-            )
+            embed.add_field(name="Traceback", value=py(with_max_len(tb)), inline=False)
         else:
             out = StringIO()
             pprint(resp, out)
@@ -451,35 +307,6 @@ CHA_ID: {fg(msg.channel.id, 0x03A678)}"""
                 At=msg.created_at.ctime(),
                 In=msg.channel.mention,
             )
-
-    @command(name="warn-power", aliases=["wp"])
-    @is_owner()
-    @send_all
-    async def warn_power_cmd(self, ctx: Context):
-        """(owner) Warn the owner when the server is unplugged."""
-
-        self.power_warn_on = not self.power_warn_on
-
-        await ctx.message.add_reaction(Emoji.CHECK)
-
-        if not self.power_warn_on:
-            # To prevent double message on deactivation
-            return
-
-        online = "1"
-        while self.power_warn_on:
-            await asyncio.sleep(20)
-            with open("/sys/class/power_supply/AC/online") as f:
-                now = f.read().strip()
-
-            if online != now:
-                online = now
-                if online == "1":
-                    yield "Le serveur est à nouveau branché sur le secteur !"
-                else:
-                    yield f":warning: {ctx.author.mention} Le serveur est sur batterie ! :warning:"
-
-        yield "I stopped checking the power supply."
 
 
 def setup(bot: CustomBot):

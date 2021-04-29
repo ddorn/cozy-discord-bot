@@ -9,11 +9,11 @@ import discord
 import yaml
 from discord import Guild, Member
 from discord.abc import GuildChannel
-from discord.ext.commands import (Cog, Context, group, has_role)
+from discord.ext.commands import Cog, Context, group, has_role
 
 from src.constants import *
-from engine import CustomBot, CustomCog, CogConfig
-from engine.errors import EpflError
+from engine import check_role, CustomBot, CustomCog, CogConfig
+from engine.errors import CozyError
 from engine.utils import confirm, french_join, mentions_to_id, myembed, report_progress
 
 RoleOrChan = Union[discord.Role, GuildChannel]
@@ -53,7 +53,9 @@ class Rule:
         fields = ", ".join(
             f"{k}={getattr(node, k).__class__.__name__}" for k in node._fields
         )
-        raise TypeError(f"Type de noeud non supporté: {node.__class__.__name__}({fields})")
+        raise TypeError(
+            f"Type de noeud non supporté: {node.__class__.__name__}({fields})"
+        )
 
     def roles_implied(self):
         """Return a set of all roles referenced in this rule."""
@@ -105,7 +107,7 @@ class RuleSet(dict):
     def load(cls):
         File.RULES.touch()
         rules = yaml.safe_load(File.RULES.read_text() or "{}")
-        
+
         return cls({item: Rule(r) for item, r in rules.items()})
 
     def save(self):
@@ -127,7 +129,6 @@ class RuleSet(dict):
 
 
 class PermsCog(CustomCog, name="Permissions"):
-
     class Config(CogConfig):
         log: bool = False
         __log__ = "Send logs to the dev about role changes."
@@ -146,20 +147,23 @@ class PermsCog(CustomCog, name="Permissions"):
         diff = bef.symmetric_difference(now)
 
         # Check what the rules are supposed to give
-        need = {item for item, rule in self.rules.items(after.guild) if rule.eval(after)}
+        need = {
+            item for item, rule in self.rules.items(after.guild) if rule.eval(after)
+        }
         # Find what rules were giving before
         # This is better than checking which roles one has,
         # as roles manually assigned (when the rule would not)
         # are not removed.
         # We care more about having enough roles than too many.
-        have = {item for item, rule in self.rules.items(after.guild) if rule.eval(before)}
+        have = {
+            item for item, rule in self.rules.items(after.guild) if rule.eval(before)
+        }
 
         add = need - have
         rem = have - need
 
         if not add and not rem:
             return  # Nothing to do !
-
 
         if self.get_conf(after.guild, "log"):
             # Logging what happens. We are in trouble (maybe) if we reach this point
@@ -198,7 +202,9 @@ class PermsCog(CustomCog, name="Permissions"):
         # Change channel access
         for chan in add:
             if isinstance(chan, GuildChannel):
-                await chan.set_permissions(after, read_messages=True, send_messages=True)
+                await chan.set_permissions(
+                    after, read_messages=True, send_messages=True
+                )
         for chan in rem:
             if isinstance(chan, GuildChannel):
                 await chan.set_permissions(after, overwrite=None)
@@ -210,25 +216,27 @@ class PermsCog(CustomCog, name="Permissions"):
         """
         Convert a string that contains an int or a channel/role mention to an int.
 
-        Raises EpflError when it cannot.
+        Raises CozyError when it cannot.
         """
 
         try:
             return int(mentions_to_id(val))
         except ValueError:
-            raise EpflError(f"Channel or role format not understood: `{val}`")
+            raise CozyError(f"Channel or role format not understood: `{val}`")
 
     @staticmethod
     def get_role_or_channel(id_, guild: Guild):
         # This makes sure we take a role/channel from the guild and don't modify other guilds.
         return guild.get_role(id_) or guild.get_channel(id_)
 
-    @group("perms", invoke_without_command=True, hidden=True, aliases=["p", "permissions"])
+    @group(
+        "perms", invoke_without_command=True, hidden=True, aliases=["p", "permissions"]
+    )
     async def perms(self, ctx: Context):
         """Affiche l'aide pour le setup des permissions."""
         await ctx.invoke(self.bot.get_command("help"), "perms")
 
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     @perms.command("set")
     async def perms_set_cmd(self, ctx: Context, channel_or_role, *, rule: Rule):
         """
@@ -243,7 +251,7 @@ class PermsCog(CustomCog, name="Permissions"):
         # Abort if we don't know what we are talking about
         item = self.get_role_or_channel(channel_or_role, ctx.guild)
         if not item:
-            raise EpflError("Channel or role not found!")
+            raise CozyError("Channel or role not found!")
 
         # Abort if conflicts with other rules
         conflicts = self.rules.add_collisions(channel_or_role, rule)
@@ -251,7 +259,7 @@ class PermsCog(CustomCog, name="Permissions"):
             conflicts_str = french_join(
                 ctx.guild.get_role(r).mention for r in conflicts
             )
-            raise EpflError(
+            raise CozyError(
                 "The set of all rules input must be distinct from the set out all rules output."
                 f" Conflicts: {conflicts_str}"
             )
@@ -276,7 +284,9 @@ class PermsCog(CustomCog, name="Permissions"):
 
         return {m for m in item.guild.members if rule.eval(m)}
 
-    async def setup_auto_rule(self, ctx: Context, item: RoleOrChan, rule: Optional[Rule]):
+    async def setup_auto_rule(
+        self, ctx: Context, item: RoleOrChan, rule: Optional[Rule]
+    ):
         """
         Update all members when we modify a Role rule but ask for confirmation first.
 
@@ -287,15 +297,19 @@ class PermsCog(CustomCog, name="Permissions"):
         is_role = isinstance(item, discord.Role)
 
         # for channels, avoid top level OR with roles
-        if not is_role \
-                and rule is not None \
-                and isinstance(rule.ast, ast.BoolOp) \
-                and isinstance(rule.ast.op, ast.Or) \
-                and any(isinstance(v, ast.Constant) for v in rule.ast.values):
-            await ctx.send("The rule contains a top level `or` with a Role, it is better "
-                           "to just allow this role directly in the channel and use rules "
-                           "for negations and conjunctions, which are impossible to do with "
-                           "the basic permission system.")
+        if (
+            not is_role
+            and rule is not None
+            and isinstance(rule.ast, ast.BoolOp)
+            and isinstance(rule.ast.op, ast.Or)
+            and any(isinstance(v, ast.Constant) for v in rule.ast.values)
+        ):
+            await ctx.send(
+                "The rule contains a top level `or` with a Role, it is better "
+                "to just allow this role directly in the channel and use rules "
+                "for negations and conjunctions, which are impossible to do with "
+                "the basic permission system."
+            )
             return
 
         have_role = self.have(item)
@@ -315,10 +329,7 @@ class PermsCog(CustomCog, name="Permissions"):
             Rule=rule.with_mentions() if rule is not None else "Deleting",
             Added=len(to_add),
             Removed=len(to_remove),
-            **{
-                "Example added": ex_add,
-                "Example removed": ex_rem,
-            }
+            **{"Example added": ex_add, "Example removed": ex_rem,},
         )
         if not await confirm(ctx, self.bot, embed=embed):
             return
@@ -336,18 +347,24 @@ class PermsCog(CustomCog, name="Permissions"):
     async def _set_perms(ctx, item: RoleOrChan, to_add, to_rem):
         is_role = isinstance(item, discord.Role)
 
-        async for member in report_progress(to_rem, ctx, f"Removing {'from ' * (not is_role)}{item.name}", 1):
+        async for member in report_progress(
+            to_rem, ctx, f"Removing {'from ' * (not is_role)}{item.name}", 1
+        ):
             if is_role:
                 await member.remove_roles(item)
             else:
                 await item.set_permissions(member, overwrite=None)
-        async for member in report_progress(to_add, ctx, f"Adding {'to ' * (not is_role)}{item.name}", 1):
+        async for member in report_progress(
+            to_add, ctx, f"Adding {'to ' * (not is_role)}{item.name}", 1
+        ):
             if is_role:
                 await member.add_roles(item)
             else:
-                await item.set_permissions(member, read_messages=True, send_messages=True)
+                await item.set_permissions(
+                    member, read_messages=True, send_messages=True
+                )
 
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     @perms.command("fix")
     async def perms_fix_cmd(self, ctx: Context):
         """
@@ -377,7 +394,9 @@ class PermsCog(CustomCog, name="Permissions"):
             "",
             Added=add_tot,
             Removed=rem_tot,
-            Rules_fixed=french_join(i.mention for i in chain(to_rem) if to_add[i] or to_rem[i]),
+            Rules_fixed=french_join(
+                i.mention for i in chain(to_rem) if to_add[i] or to_rem[i]
+            ),
         )
         if not await confirm(ctx, self.bot, embed=embed):
             return
@@ -385,7 +404,7 @@ class PermsCog(CustomCog, name="Permissions"):
         for item in to_rem:
             await self._set_perms(ctx, item, to_add[item], to_rem[item])
 
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     @perms.command("show")
     async def perms_show_cmd(self, ctx: Context):
         """(modo) Affiche les permissions automatiques."""
@@ -394,8 +413,8 @@ class PermsCog(CustomCog, name="Permissions"):
             colour=EMBED_COLOR,
             title="Automatic permissions",
             description="Voici la liste des roles et permissions de salon que "
-                        "le bot synchronise sur ce serveur. Cette liste peut"
-                        "être modifiée avec `!perm set` et `!perm del`."
+            "le bot synchronise sur ce serveur. Cette liste peut"
+            "être modifiée avec `!perm set` et `!perm del`.",
         )
 
         # Okay, c'est un peu du code dupliqué... Mais pas tant que ça non plus
@@ -426,7 +445,7 @@ class PermsCog(CustomCog, name="Permissions"):
 
         await ctx.send(embed=embed)
 
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     @perms.command("del")
     async def perms_del_cmd(self, ctx: Context, channel_or_role):
         """(modo) Supprime une regle automatique."""
@@ -438,7 +457,7 @@ class PermsCog(CustomCog, name="Permissions"):
         obj = self.get_role_or_channel(item, ctx.guild)
         await self.setup_auto_rule(ctx, obj, None)
 
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     @perms.command("clear")
     async def perms_clear_cmd(self, ctx, channel: int):
         """(modo) Removes all permissions from a channel."""

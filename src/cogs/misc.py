@@ -9,39 +9,112 @@ import random
 import re
 import traceback
 import urllib
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from functools import partial
 from itertools import chain
 from math import factorial
-from operator import attrgetter
+from operator import attrgetter, itemgetter
 from time import time
-from typing import List
+from typing import List, Set, Union
 
 import aiohttp
 import discord
-from discord import AllowedMentions, ChannelType, Guild, Member, PermissionOverwrite, TextChannel
+import yaml
+from discord import (
+    AllowedMentions,
+    ChannelType,
+    Guild,
+    Member,
+    TextChannel,
+)
 from discord.abc import GuildChannel
-from discord.ext import commands
-from discord.ext.commands import (command, Command, CommandError, Context, Group, guild_only)
-from discord.utils import get, find
-from discord_slash import SlashCommandOptionType, SlashContext
-from discord_slash.cog_ext import cog_slash
-from discord_slash.utils.manage_commands import create_option
-
+from discord.ext.commands import (
+    BadArgument,
+    command,
+    Command,
+    CommandError,
+    Context,
+    group,
+    Group,
+    guild_only,
+    MemberConverter,
+    RoleConverter,
+)
+from discord.utils import find, get
+from engine import (
+    check_role,
+    CogConfig,
+    CozyError,
+    CustomBot,
+    CustomCog,
+    french_join,
+    mentions_to_id,
+    myembed,
+    start_time,
+    with_max_len,
+)
 from src.cogs.perms import RuleSet
 from src.constants import *
-from engine import CustomBot, CustomCog, CogConfig, EpflError, french_join, mentions_to_id, myembed, start_time, with_max_len
+from src.engine import send_and_bin
 
 # supported operators
 OPS = {
-    ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
-    ast.FloorDiv: op.floordiv, ast.Mod: op.mod,
-    ast.Div: op.truediv, ast.Pow: op.pow, ast.BitXor: op.xor,
-    ast.USub: op.neg, "abs": abs, "π": math.pi, "τ": math.tau,
-    "i": 1j, "fact": factorial,
+    ast.Add: op.add,
+    ast.Sub: op.sub,
+    ast.Mult: op.mul,
+    ast.FloorDiv: op.floordiv,
+    ast.Mod: op.mod,
+    ast.Div: op.truediv,
+    ast.Pow: op.pow,
+    ast.BitXor: op.xor,
+    ast.USub: op.neg,
+    "abs": abs,
+    "π": math.pi,
+    "τ": math.tau,
+    "i": 1j,
+    "fact": factorial,
 }
 
 for name in dir(math):
     if not name.startswith("_"):
         OPS[name] = getattr(math, name)
+
+
+@dataclass
+class Joke(yaml.YAMLObject):
+    yaml_tag = "Joke"
+    yaml_dumper = yaml.SafeDumper
+    yaml_loader = yaml.SafeLoader
+    joke: str
+    joker: int
+    likes: Set[int] = field(default_factory=set)
+    dislikes: Set[int] = field(default_factory=set)
+    file: str = None
+
+
+HUG_RE = re.compile(r"^(?P<hugger>\d+) -> (?P<hugged>\d+) \| (?P<text>.*)$")
+
+
+class Hug:
+    def __init__(self, hugger, hugged, text):
+        self.hugger = hugger
+        self.hugged = hugged
+        self.text = text
+
+    @classmethod
+    def from_str(cls, line: str):
+        match = HUG_RE.match(line)
+        if not match:
+            raise ValueError(f"'{line}' is not a valid hug format.")
+        hugger = int(match.group("hugger"))
+        hugged = int(match.group("hugged"))
+        text = match.group("text")
+
+        return cls(hugger, hugged, text)
+
+    def __repr__(self):
+        return f"{self.hugger} -> {self.hugged} | {self.text}"
 
 
 class MiscCog(CustomCog, name="Divers"):
@@ -50,9 +123,449 @@ class MiscCog(CustomCog, name="Divers"):
 
     def __init__(self, bot: CustomBot):
         super().__init__(bot)
-        self.show_hidden = False
-        self.verify_checks = True
-        self.computing = False  # Fractal
+        self.computing = False
+        self.hugs = self.get_hugs()
+
+    # ----------------- Hugs ---------------- #
+
+    @command(aliases=["<3", "❤️", ":heart:"])  # Emoji.RAINBOW_HEART])
+    async def hug(self, ctx: Context, who="everyone"):
+        """Fait un câlin à quelqu'un. :heart:"""
+
+        if who == "everyone":
+            who = ctx.guild.default_role
+        elif who == "back":
+            return await self.hug_back(ctx)
+        else:
+            try:
+                who = await RoleConverter().convert(ctx, who)
+            except BadArgument:
+                try:
+                    who = await MemberConverter().convert(ctx, who)
+                except BadArgument:
+                    return await ctx.send(
+                        discord.utils.escape_mentions(
+                            f'Il n\'y a pas de "{who}". :man_shrugging:'
+                        )
+                    )
+        who: Union[discord.Role, Member]
+        bot_hug = who == self.bot.user
+
+        bonuses = [
+            "C'est trop meuuuugnon !",
+            "Ça remonte le moral ! :D",
+            ":hugging:",
+            ":smiling_face_with_3_hearts:",
+            "Oh wiiii",
+            f"{who.mention} en redemande un !"
+            if not bot_hug
+            else "J'en veux un autre ! :heart_eyes:",
+            "Le·a pauvre, iel est tout·e rouge !"
+            if not bot_hug
+            else "Un robot ne peut pas rougir, mais je crois que... :blush:",
+            "Hihi, il gratte ton pull en laine ! :sheep:",
+        ]
+
+        # if has_role(ctx.author, Role.PRETRESSE_CALINS):
+        #     bonuses += [
+        #         "C'est le plus beau calin du monde :smiling_face_with_3_hearts: :smiling_face_with_3_hearts:",
+        #         f"{who.mention} est subjugué·e ! :smiling_face_with_3_hearts:",
+        #     ]
+
+        if who.id == OWNER:
+            bonuses += [
+                "Tiens... Ça sent le mojito... :lemon:",
+                ":green_heart: :lemon: :green_heart:",
+            ]
+
+        if who == ctx.author:
+            msg = f"{who.mention} se fait un auto-calin !"
+            bonuses += [
+                "Mais c'est un peu ridicule...",
+                "Mais iel a les bras trop courts ! :cactus:",
+                "Il en faut peu pour être heureux :wink:",
+            ]
+        elif who == ctx.guild.default_role:
+            msg = f"{ctx.author.mention} fait un câlin a touuuut le monde !"
+            bonuses += [
+                "Ça fait beaucoup de gens pour un câlin !",
+                "Plus on est, plus on est calins !",
+                "C'est pas très COVID-19 tout ça !",
+                "Tout le monde est heureux maintenant !",
+            ]
+        elif bot_hug:
+            msg = f"{ctx.author.mention} me fait un gros câliiiiin !"
+            bonuses += ["Je trouve ça très bienveillant <3"]
+        else:
+            msg = f"{ctx.author.mention} fait un gros câlin à {who.mention} !"
+            bonuses += [
+                f"Mais {who.mention} n'apprécie pas...",
+                "Et ils s'en vont chasser des canards ensemble :wink:",
+                "Oh ! Iel sent bon...",
+                "Et moi quand est ce que j'ai le droit à un calin ?",
+                f"{who.mention} a serré tellment fort qu'iel vous a coupé en deux :scream:",
+                f"{who.mention} propose à {ctx.author.mention} de se revoir autour d'une :pizza: !",
+                "Les drones du commissaire Winston passent par là et vous ordonnent d'arrêter.",
+                "Après ce beau moment de tendresse, ils décident d'aller discuter en créant des puzzles.",
+                f"{who.mention} se réfugie dans l'entrepôt d'Animath et bloque l'entrée avec un meuble.",
+            ]
+
+        bonus = random.choice(bonuses)
+
+        text = f"{msg} {bonus}"
+        self.add_hug(ctx.author.id, who.id, text)
+
+        await ctx.send(text)
+
+        if bot_hug and random.random() > 0.9:
+            await asyncio.sleep(3.14159265358979323)
+            ctx.author = get(ctx.guild.members, id=self.bot.user.id)
+            await ctx.invoke(self.hug, "back")
+
+    async def hug_back(self, ctx: Context):
+        hugger = ctx.author.id
+
+        last_hug: Hug = get(reversed(self.hugs), hugged=hugger)
+        if not last_hug:
+            return await ctx.send(
+                f"Personne n'a jamais fait de calin à {ctx.author.mention}, il faut y remédier !"
+            )
+
+        if "coupé en deux" in last_hug.text:
+            return await ctx.send(
+                "Tu ne vas quand même pas faire un câlin à quelqu'un "
+                "que tu viens de couper en deux !"
+            )
+
+        await ctx.invoke(self.hug, str(last_hug.hugger))
+
+    @command(name="hug-stats", aliases=["hs"])
+    # @commands.has_role(Role.PRETRESSE_CALINS)
+    @check_role(Role.MODO)
+    async def hugs_stats_cmd(self, ctx: Context, who: Member = None):
+        """(prêtresse des calins) Affiche qui est le plus câliné """
+
+        if who is None:
+            await self.send_all_hug_stats(ctx)
+        else:
+            await self.send_hugs_stats_for(ctx, who)
+
+    async def send_all_hug_stats(self, ctx):
+        medals = [
+            ":first_place:",
+            ":second_place:",
+            ":third_place:",
+            ":medal:",
+            ":military_medal:",
+        ]
+        ranks = ["Gros Nounours", "Petit Panda", "Ours en peluche"]
+
+        embed = discord.Embed(
+            title="Prix du plus câliné",
+            color=discord.Colour.magenta(),
+            description=f"Nombre de total de câlins : {len(self.hugs)} {Emoji.HEART}",
+        )
+
+        everyone = ctx.guild.default_role.id
+        everyone_hugs = 0
+        everyone_diff = set()
+        stats = Counter()
+        diffs = defaultdict(set)
+        for h in self.hugs:
+            if h.hugged == everyone:
+                everyone_hugs += 1
+                everyone_diff.add(h.hugger)
+            else:
+                if h.hugged != h.hugger:
+                    stats[h.hugged] += 1
+                    diffs[h.hugged].add(h.hugger)
+
+                role: discord.Role = get(ctx.guild.roles, id=h.hugged)
+                if role is not None:
+                    for m in role.members:
+                        if m.id != h.hugger:
+                            stats[m.id] += 1
+                            diffs[m.id].add(h.hugger)
+
+        for m, d in diffs.items():
+            stats[m] += len(everyone_diff.union(d)) * 42 + everyone_hugs
+
+        top = sorted(list(stats.items()), key=itemgetter(1), reverse=True)
+
+        for i in range(min(3, len(top))):
+            m = medals[i]
+            r = ranks[i]
+            id, qte = top[i]
+            who = self.name_for(ctx, id)
+
+            embed.add_field(name=f"{m} - {r}", value=f"{who} : {qte}  :heart:")
+
+        top4to7 = "\n ".join(
+            f"{medals[3]} {self.name_for(ctx, id)} : {qte}  :orange_heart:"
+            for id, qte in top[3 : min(8, len(top))]
+        )
+        if top4to7:
+            embed.add_field(name="Apprenti peluche", value=top4to7)
+
+        top8to13 = "\n".join(
+            f"{medals[4]} {self.name_for(ctx, id)} : {qte}  :yellow_heart:"
+            for id, qte in top[8 : min(13, len(top))]
+        )
+        if top8to13:
+            embed.add_field(name="Pelote de laine de canard", value=top8to13)
+
+        await ctx.send(embed=embed)
+
+    async def send_hugs_stats_for(self, ctx: Context, who: discord.Member):
+
+        given = self.hugs_given(ctx, who.id)
+        received = self.hugs_received(ctx, who.id)
+        auto = self.auto_hugs(ctx, who.id)
+        cut = [h for h in given if "coupé en deux" in h.text]
+        infos = {
+            "Câlins donnés": (len(given), 1),
+            "Câlins reçus": (len(received), 1),
+            "Personnes câlinées": (len(set(h.hugged for h in given)), 20),
+            "Câliné par": (len(set(h.hugger for h in received)), 30),
+            "Auto-câlins": ((len(auto)), 3),
+            "Morceaux": (len(cut), 30),
+        }
+
+        most_given = Counter(h.hugged for h in given).most_common(1)
+        most_received = Counter(h.hugger for h in received).most_common(1)
+        most_given = most_given[0] if most_given else (0, 0)
+        most_received = most_received[0] if most_received else (0, 0)
+
+        embed = discord.Embed(
+            title=f"Câlins de {who.display_name}",
+            color=discord.Colour.magenta(),
+            description=(
+                f"On peut dire que {who.mention} est très câlin·e, avec un score de "
+                f"{self.score_for(ctx, who.id)}. Iel a beaucoup câliné "
+                f"{self.name_for(ctx, most_given[0])} "
+                f"*({most_given[1]} :heart:)* et "
+                f"s'est beaucoup fait câliner par {self.name_for(ctx, most_received[0])} "
+                f"*({most_received[1]} :heart:)* !"
+            ),
+        )
+        user: discord.User = self.bot.get_user(who.id)
+        embed.set_thumbnail(url=user.avatar_url)
+
+        for f, (v, h_factor) in infos.items():
+            heart = self.heart_for_stat(v * h_factor)
+            if f == "Morceaux":
+                v = 2 ** v
+            embed.add_field(name=f, value=f"{v} {heart}")
+
+        await ctx.send(embed=embed)
+
+    def ris(self, ctx: Context, id, role_or_member_id):
+        """Whether the id is the same member or a member that has the given role."""
+        if id == role_or_member_id:
+            return True
+
+        member: Member = get(ctx.guild.members, id=id)
+
+        if member is None:
+            return False
+
+        role = get(member.roles, id=role_or_member_id)
+
+        return role is not None
+
+    def heart_for_stat(self, v):
+        hearts = [
+            ":broken_heart:",
+            ":green_heart:",
+            ":yellow_heart:",
+            ":orange_heart:",
+            ":heart:",
+            ":sparkling_heart:",
+            Emoji.RAINBOW_HEART,
+        ]
+
+        if v <= 0:
+            return hearts[0]
+        elif v >= 5000:
+            return hearts[-1]
+        elif v >= 2000:
+            return hearts[-2]
+        else:
+            return hearts[len(str(v))]
+
+    def name_for(self, ctx, member_or_role_id):
+        memb = ctx.guild.get_member(member_or_role_id)
+        if memb is not None:
+            name = memb.mention
+        else:
+            role = ctx.guild.get_role(member_or_role_id)
+            if role is None:
+                name = getattr(
+                    self.bot.get_user(member_or_role_id), "mention", "Personne"
+                )
+            else:
+                name = role.name
+
+        return name
+
+    def score_for(self, ctx, member_id):
+        received = self.hugs_received(ctx, member_id)
+        diffs = set(h.hugger for h in received)
+        return 42 * len(diffs) + len(received)
+
+    def hugs_given(self, ctx, who_id):
+        eq = partial(self.ris, ctx, who_id)
+        return [h for h in self.hugs if eq(h.hugger) and not eq(h.hugged)]
+
+    def hugs_received(self, ctx, who_id):
+        eq = partial(self.ris, ctx, who_id)
+        return [h for h in self.hugs if eq(h.hugged) and not eq(h.hugger)]
+
+    def auto_hugs(self, ctx, who_id):
+        eq = partial(self.ris, ctx, who_id)
+        return [h for h in self.hugs if eq(h.hugged) and eq(h.hugger)]
+
+    def get_hugs(self):
+        File.HUGS.touch()
+        lines = File.HUGS.read_text().strip().splitlines()
+        return [Hug.from_str(l) for l in lines]
+
+    def add_hug(self, hugger: int, hugged: int, text):
+        File.HUGS.touch()
+        with open(File.HUGS, "a") as f:
+            f.write(f"{hugger} -> {hugged} | {text}\n")
+        self.hugs.append(Hug(hugger, hugged, text))
+
+    # ---------------- Jokes ---------------- #
+
+    def load_jokes(self) -> List[Joke]:
+        # Ensure it exists
+        File.JOKES_V2.touch()
+        with open(File.JOKES_V2) as f:
+            jokes = list(yaml.safe_load_all(f))
+
+        return jokes
+
+    def save_jokes(self, jokes):
+        File.JOKES_V2.touch()
+        with open(File.JOKES_V2, "w") as f:
+            yaml.safe_dump_all(jokes, f)
+
+    @group(name="joke", invoke_without_command=True, case_insensitive=True)
+    async def joke(self, ctx: Context, id=None):
+        """Fait discretement une blague aléatoire."""
+
+        m: discord.Message = ctx.message
+        await m.delete()
+
+        jokes = self.load_jokes()
+        if id is not None:
+            id = int(id)
+            joke_id = id
+            jokes = sorted(
+                jokes, key=lambda j: len(j.likes) - len(j.dislikes), reverse=True
+            )
+        else:
+            joke_id = random.randrange(len(jokes))
+
+        try:
+            joke = jokes[joke_id]
+        except IndexError:
+            raise CozyError("Il n'y a pas de blague avec cet ID.")
+
+        if joke.file:
+            file = discord.File(File.MEMES / joke.file)
+        else:
+            file = None
+
+        message: discord.Message = await ctx.send(joke.joke, file=file)
+
+        await message.add_reaction(Emoji.PLUS_1)
+        await message.add_reaction(Emoji.MINUS_1)
+        await self.wait_for_joke_reactions(joke_id, message)
+
+    @joke.command(name="new")
+    @send_and_bin
+    async def new_joke(self, ctx: Context):
+        """Ajoute une blague pour le concours de blague."""
+        jokes = self.load_jokes()
+        joke_id = len(jokes)
+
+        author: discord.Member = ctx.author
+        message: discord.Message = ctx.message
+
+        msg = message.content[len("!joke new ") :]
+
+        joke = Joke(msg, ctx.author.id, set())
+
+        if message.attachments:
+            file: discord.Attachment = message.attachments[0]
+            joke.file = str(f"{joke_id}-{file.filename}")
+            await file.save(File.MEMES / joke.file)
+        elif not msg.strip():
+            return "Tu ne peux pas ajouter une blague vide..."
+
+        jokes.append(joke)
+        self.save_jokes(jokes)
+        await message.add_reaction(Emoji.PLUS_1)
+        await message.add_reaction(Emoji.MINUS_1)
+
+        await self.wait_for_joke_reactions(joke_id, message)
+
+    async def wait_for_joke_reactions(self, joke_id, message):
+        def check(reaction: discord.Reaction, u):
+            return (message.id == reaction.message.id) and str(reaction.emoji) in (
+                Emoji.PLUS_1,
+                Emoji.MINUS_1,
+            )
+
+        start = time()
+        end = start + 24 * 60 * 60 * 5  # 5 days
+        while time() < end:
+
+            try:
+                reaction, user = await self.bot.wait_for(
+                    "reaction_add", check=check, timeout=end - time()
+                )
+            except asyncio.TimeoutError:
+                return
+
+            if user.id == BOT:
+                continue
+
+            jokes = self.load_jokes()
+            if str(reaction.emoji) == Emoji.PLUS_1:
+                jokes[joke_id].likes.add(user.id)
+            else:
+                jokes[joke_id].dislikes.add(user.id)
+
+            self.save_jokes(jokes)
+
+    @joke.command(name="top", hidden=True)
+    @check_role(Role.MODO)
+    async def best_jokes(self, ctx: Context):
+        """Affiche le palmares des blagues."""
+
+        jokes = self.load_jokes()
+
+        s = sorted(jokes, key=lambda j: len(j.likes) - len(j.dislikes), reverse=True)
+
+        embed = discord.Embed(title="Palmares des blagues.")
+        for i, joke in enumerate(s[:10]):
+            who = get(ctx.guild.members, id=joke.joker)
+
+            text = joke.joke
+            if joke.file:
+                text += " - image non inclue - "
+
+            name = who.display_name if who else "Inconnu"
+            embed.add_field(
+                name=f"{i} - {name} - {len(joke.likes)} :heart: {len(joke.dislikes)} :broken_heart:",
+                value=text,
+                inline=False,
+            )
+
+        await ctx.send(embed=embed)
 
     @command(
         name="choose",
@@ -67,308 +580,62 @@ class MiscCog(CustomCog, name="Divers"):
         il suffit de mettre des guillemets (`"`) autour.
         """
 
-        choice = random.choice(args)
-        msg = await ctx.send(f"J'ai choisi... **{choice}**")
+        if not args:
+            msg = await ctx.send("You didn't give me any option !")
+        else:
+            choice = random.choice(args)
+            msg = await ctx.send(f"J'ai choisi... **{choice}**")
         await self.bot.wait_for_bin(ctx.author, msg),
 
-    @guild_only()
-    @command(name="info", aliases=["status"])
-    async def info_cmd(self, ctx: Context, *, what: str = None):
-        """Affiche des informations à propos du serveur ou de l'argument."""
-
-        if what is None:
-            return await self.send_server_info(ctx)
-
-        guild: Guild = ctx.guild
-        what_ = what
-        what = what.strip()
-
-        # Special cases
-        if what in ("ici", "here"):
-            return await self.send_channel_info(ctx, ctx.channel)
-        if what in ("me", "moi"):
-            return await self.send_member_info(ctx, ctx.author)
-
-        # Emojis first
-        emoji = get(ctx.guild.emojis, name=what) or \
-                find(lambda e: str(e) == what or e.name.casefold() == what.casefold(), ctx.guild.emojis)
-        if emoji:
-            return await self.send_emoji_info(ctx, emoji)
-
-        # try to convert it to an id
-        what = mentions_to_id(what)
-        try:
-            what = int(what)
-            obj = guild.get_channel(what) or guild.get_role(what) or guild.get_member(what)
-        except ValueError:
-            obj = guild.get_member_named(what) or get(guild.roles, name=what) or get(guild.channels, name=what)
-
-            # Last try: casefold comp
-            what = what.casefold()
-            for r in chain(guild.roles, guild.channels, guild.members):
-                if r.name.casefold() == what:
-                    obj = r
-                    break
-
-        if isinstance(obj, GuildChannel) and not obj.permissions_for(ctx.author).read_messages:
-            obj = None
-
-        if obj is None:
-            raise EpflError(f"Could not understand what {what_} is.")
-
-        if isinstance(obj, discord.Role):
-            return await self.send_role_info(ctx, obj)
-        elif isinstance(obj, discord.Member):
-            return await self.send_member_info(ctx, obj)
-        else:
-            return await self.send_channel_info(ctx, obj)
-
-    async def send_server_info(self, ctx):
-        guild: Guild = ctx.guild
-        embed = discord.Embed(title="Server info", color=EMBED_COLOR)
-        uptime = datetime.timedelta(seconds=round(time() - start_time()))
-        text = len(guild.text_channels)
-        vocal = len(guild.voice_channels)
-        infos = {
-            "Members": len(guild.members),
-            "Text channels": text,
-            "Voice channels": vocal,
-            "Nombres de roles": len(guild.roles),
-            "Bot uptime": uptime,
-        }
-
-        width = max(map(len, infos))
-        txt = "\n".join(
-            f"`{key.rjust(width)}`: {value}" for key, value in infos.items()
-        )
-        embed.add_field(name="Stats", value=txt)
-
-        await ctx.send(embed=embed)
-
-    async def send_role_info(self, ctx: Context, role: discord.Role):
-        rule = RuleSet.load().get(role.id)
-
-        age = (datetime.datetime.now() - role.created_at)
-        d = age.days
-
-        embed = myembed(
-            f"Info pour le role {role.name}",
-            "",
-            role.color,
-            Mention=role.mention,
-            ID=role.id,
-            Members=len(role.members),
-            # Creation=role.created_at.ctime(),
-            Created=f"{d} day{'s' * (d > 1)} ago",
-            Mentionable="Yes" if role.mentionable else "No",
-            Position=role.position,
-            Auto_condition=rule.with_mentions() if rule is not None else "",
-        )
-
-        await ctx.send(embed=embed)
-
-    async def send_member_info(self, ctx: Context, member: Member):
-
-        member_since = datetime.datetime.now() - member.joined_at
-
-        title = f"Info pour {member.display_name}"
-
-        embed = myembed(
-            title,
-            "",
-            member.color,
-            Mention=member.mention,
-            ID=member.id,
-            Top_role=member.top_role.mention,
-            Member_for=f"{member_since.days} day{'s' * (member_since.days > 1)}",
-            Booster_since=member.premium_since,
-            _Roles=french_join(r.mention for r in reversed(member.roles[1:])),
-        )
-
-        embed.set_thumbnail(url=member.avatar_url)
-
-        await ctx.send(embed=embed)
-
-    async def send_channel_info(self, ctx: Context, chan: GuildChannel):
-
-        crea = datetime.datetime.now() - chan.created_at
-        rule = RuleSet.load().get(chan.id)
-        type = "la catégorie" if chan.type == ChannelType.category else "le salon"
-        access = [m for m in ctx.guild.members if chan.permissions_for(m).read_messages]
-
-        embed = myembed(
-            f"Info pour {type} {chan.name}",
-            "",
-            Link=chan.mention if isinstance(chan, TextChannel) else None,
-            ID=chan.id,
-            Have_access=f"{len(access)} members",
-            Created=f"{crea.days} day{'s' * (crea.days > 1)} ago",
-            Authorized=french_join((r.mention
-                                    for r, ov in chan.overwrites.items()
-                                    if isinstance(r, discord.Role) and ov.read_messages), "ou"),
-            Auto_condition=rule.with_mentions() if rule is not None else None,
-        )
-
-        access.sort(key=lambda x: (-x.top_role.position, x.display_name))
-        access = " ".join([m.mention for m in access if not m.bot]) + " + bots"
-        if len(access) <= 1024:
-            embed.add_field(name="Members", value=access)
-
-        await ctx.send(embed=embed)
-
-    async def send_emoji_info(self, ctx: Context, emoji: discord.Emoji):
-
-        # Author can only be retreived this way
-        emoji = await ctx.guild.fetch_emoji(emoji.id)
-
-        created = datetime.datetime.now() - emoji.created_at
-
-        embed = myembed(
-            f"Info pour {str(emoji)}",
-            "",
-            Added=f"{created.days} day{'s' * (created.days > 1)} ago",
-            Added_by=emoji.user.mention,
-            ID=emoji.id,
-            Mention=f"`{str(emoji)}`",
-            Link=emoji.url,
-        )
-
-        embed.set_image(url=emoji.url)
-
-        await ctx.send(embed=embed)
-
-    @guild_only()
-    @commands.has_role(Role.MODO)
-    @command(name="temp-hide", aliases=["th"])
-    async def temp_hide_cmd(self, ctx: Context, duration: int = 60):
-        """
-        (modo) Hide the channel for a given time. Useful to prevent pings.
-
-        The channel is hidden for a default of 60s and can be made visible
-        again earlier by deleting the `!temp-hide` message.
-
-        Works only on channels with less than 10 permissions.
-        """
-
-        chan: GuildChannel = ctx.channel
-        if isinstance(chan, GuildChannel):
-            perms = chan.overwrites
-
-            if len(perms) > 10:
-                raise EpflError("Cannot hide a channel with more than 10 permissions.")
-
-            await chan.set_permissions(ctx.author, read_messages=True)
-            await chan.set_permissions(ctx.guild.default_role, read_messages=False)
-            for p in perms:
-                if p not in (ctx.guild.default_role, ctx.author):
-                    await chan.set_permissions(p, overwrite=None)
-
-            await self.bot.wait_for_bin(ctx.author, ctx.message, timeout=duration)
-
-            await chan.set_permissions(ctx.author, overwrite=None)
-            for p, perm in perms.items():
-                await chan.set_permissions(p, overwrite=perm)
-
-    @guild_only()
-    @commands.has_role(Role.MODO)
-    @command(name="freeze")
-    async def freeze_cmd(self, ctx: Context, duration: int = 60):
-        """
-        (modo) Prevent anyone to write in the channel for a given time.
-
-        The channel is hidden for a default of 60s and can be made visible
-        again earlier by deleting the `!temp-hide` message.
-
-        Works only on channels with less than 10 permissions.
-        """
-
-        chan: GuildChannel = ctx.channel
-        perms = chan.overwrites
-
-        if len(perms) > 10:
-            raise EpflError("Cannot hide a channel with more than 10 permissions.")
-
-        await ctx.message.delete()
-        msg = await ctx.channel.send(embed=myembed(
-            f'This channel has been frozen for {duration} seconds.'
-        ))
-        await self.bot.info('Channel frozen',
-                           f'Channel {ctx.channel.mention} has been frozen by {ctx.author.mention} for {duration} seconds.')
-
-        try:
-            for who, perm in perms.items():
-                new = PermissionOverwrite(**dict(iter(perm)))
-                new.send_messages = False
-                await chan.set_permissions(who, overwrite=new)
-
-            await self.bot.wait_for_bin(ctx.author, msg, timeout=duration)
-        finally:
-            for who, perm in perms.items():
-                await chan.set_permissions(who, overwrite=perm)
-
-
-    @cog_slash(
-        name='fractal',
-        description='Genère une fractale aléatoire',
-        options=[
-            create_option(
-                'seed', 'La graine pour générer la fractale',
-                SlashCommandOptionType.STRING, False,
-            )
-        ],
-    )
-    async def fractal(self, ctx: SlashContext, seed=None):
+    # @cog_slash(
+    #     name='fractal',
+    #     description='Genère une fractale aléatoire',
+    #     options=[
+    #         create_option(
+    #             'seed', 'La graine pour générer la fractale',
+    #             SlashCommandOptionType.STRING, False,
+    #         )
+    #     ],
+    # )
+    @command(rest_is_raw=True)
+    async def fractal(self, ctx: Context, *, seed=None):
         """Dessine une fractale aléatoire."""
 
         if self.computing:
             return await ctx.send("Il y a déjà une fractale en cours de calcul...")
 
-        try:
-            self.computing = True
+        with ctx.channel.typing():
+            try:
+                self.computing = True
 
-            await ctx.respond()
-
-            # msg: discord.Message = ctx.message
-            # seed = msg.content[len("!fractal "):]
-            seed = seed or str(random.randint(0, 1_000_000_000))
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+                # await ctx.respond()
+                # msg: discord.Message = ctx.message
+                # seed = msg.content[len("!fractal "):]
+                seed = seed or str(random.randint(0, 1_000_000_000))
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
                         FRACTAL_URL.format(seed=urllib.parse.quote(seed)), timeout=120
-                ) as resp:
-                    if resp.status != 200:
-                        print(resp)
-                        return await ctx.send(
-                            "Il y a un problème pour calculer/télécharger l'image..."
+                    ) as resp:
+                        if resp.status != 200:
+                            print(resp)
+                            return await ctx.send(
+                                "Il y a un problème pour calculer/télécharger l'image..."
+                            )
+                        data = io.BytesIO(await resp.read())
+
+                        # seed_escaped = remove_mentions_as(ctx.author, ctx.channel, seed)
+                        await ctx.send(
+                            f"Seed: {seed}",
+                            file=discord.File(data, "fractal.png"),
+                            allowed_mentions=AllowedMentions.none(),
                         )
-                    data = io.BytesIO(await resp.read())
 
-                    # seed_escaped = remove_mentions_as(ctx.author, ctx.channel, seed)
-                    await ctx.send(
-                        f"Seed: {seed}", file=discord.File(data, "fractal.png"),
-                        allowed_mentions=AllowedMentions.none(),
-                    )
-
-                    if ctx.guild:
-                        conf: MiscCog.Config
-                        with self.config(ctx.guild) as conf:
-                            conf.fractals_generated += 1
-        finally:
-            self.computing = False
-
-    @command(aliases=["pong"])
-    async def ping(self, ctx):
-        """Affiche la latence avec le bot."""
-
-        msg: discord.Message = ctx.message
-        rep = "Ping !" if "pong" in msg.content.lower() else "Pong !"
-
-        ping = msg.created_at.timestamp()
-        msg: discord.Message = await ctx.send(rep)
-        pong = msg.created_at.timestamp()
-
-        delta = pong - ping
-
-        await msg.edit(content=rep + f" Ça a pris {int(1000 * (delta))}ms")
+                        if ctx.guild:
+                            conf: MiscCog.Config
+                            with self.config(ctx.guild) as conf:
+                                conf.fractals_generated += 1
+            finally:
+                self.computing = False
 
     # ---------------- Calc ----------------- #
 
@@ -404,7 +671,7 @@ class MiscCog(CustomCog, name="Divers"):
 
         for prefix in (PREFIX + " ", PREFIX, "calc", "="):
             if query.startswith(prefix):
-                query = query[len(prefix):]
+                query = query[len(prefix) :]
         # Replace implicit multiplication by explicit *
         query = re.sub(r"\b((\d)+(\.\d+)?)(?P<name>[a-zA-Z]+)\b", r"\1*\4", query)
 
@@ -413,7 +680,7 @@ class MiscCog(CustomCog, name="Divers"):
         ex = None
         result = 42
         try:
-            result = self._eval(ast.parse(query, mode='eval').body)
+            result = self._eval(ast.parse(query, mode="eval").body)
         except Exception as e:
             ex = e
 
@@ -431,11 +698,17 @@ class MiscCog(CustomCog, name="Divers"):
         if isinstance(result, float):
             result = round(result, 12)
 
-        embed = discord.Embed(title=discord.utils.escape_markdown(query), color=EMBED_COLOR)
+        embed = discord.Embed(
+            title=discord.utils.escape_markdown(query), color=EMBED_COLOR
+        )
         # embed.add_field(name="Entrée", value=f"`{query}`", inline=False)
-        embed.add_field(name="Valeur", value=f"`{with_max_len(str(result), 1022)}`", inline=False)
+        embed.add_field(
+            name="Valeur", value=f"`{with_max_len(str(result), 1022)}`", inline=False
+        )
         if ex and with_tb:
-            embed.add_field(name="Erreur", value=f"{ex.__class__.__name__}: {ex}", inline=False)
+            embed.add_field(
+                name="Erreur", value=f"{ex.__class__.__name__}: {ex}", inline=False
+            )
             trace = io.StringIO()
             traceback.print_exception(type(ex), ex, ex.__traceback__, file=trace)
             trace.seek(0)
@@ -453,196 +726,19 @@ class MiscCog(CustomCog, name="Divers"):
             return OPS[type(node.op)](self._eval(node.operand))
         elif isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name):
-                return OPS[node.func.id](*(self._eval(n) for n in node.args),
-                                         **{k.arg: self._eval(k.value) for k in node.keywords})
+                return OPS[node.func.id](
+                    *(self._eval(n) for n in node.args),
+                    **{k.arg: self._eval(k.value) for k in node.keywords},
+                )
         elif isinstance(node, ast.Name):
             return OPS[node.id]
 
         fields = ", ".join(
             f"{k}={getattr(node, k).__class__.__name__}" for k in node._fields
         )
-        raise TypeError(f"Type de noeud non supporté: {node.__class__.__name__}({fields})")
-
-    # ----------------- Help ---------------- #
-
-    @command(name="help", aliases=["h"])
-    async def help_cmd(self, ctx: Context, *args):
-        """Affiche des détails à propos d'une commande."""
-
-        if not args:
-            msg = await self.send_bot_help(ctx)
-        else:
-            msg = await self.send_command_help(ctx, args)
-
-        await self.bot.wait_for_bin(ctx.author, msg)
-
-    async def send_bot_help(self, ctx: Context):
-        embed = discord.Embed(
-            title="Aide pour EPFL-bot",
-            description="Voici une liste des commandes utiles (ou pas) "
-                        "sur ce serveur. Pour avoir plus de détails il "
-                        "suffit d'écrire `!help COMMANDE` en remplacant `COMMANDE` "
-                        "par le nom de la commande, par exemple `!help help`.",
-            color=EMBED_COLOR,
+        raise TypeError(
+            f"Type de noeud non supporté: {node.__class__.__name__}({fields})"
         )
-
-        cog_getter = attrgetter("cog_name")
-        commands = itertools.groupby(sorted(self.bot.walk_commands(), key=cog_getter), cog_getter)
-
-        for cat_name, cat in commands:
-            cat = {c.qualified_name: c for c in cat}
-            cat = await self.filter_commands(
-                ctx, list(cat.values()), sort=True, key=attrgetter("qualified_name")
-            )
-
-            if not cat:
-                continue
-
-            names = ["!" + c.qualified_name for c in cat]
-            width = max(map(len, names))
-            names = [name.rjust(width) for name in names]
-            short_help = [c.short_doc for c in cat]
-
-            lines = [f"`{n}` - {h}" for n, h in zip(names, short_help)]
-
-            if cat_name is None:
-                cat_name = "Autres"
-
-            c: Command
-            text = "\n".join(lines)
-            embed.add_field(name=cat_name, value=text, inline=False)
-
-        embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
-
-        return await ctx.send(embed=embed)
-
-    async def send_command_help(self, ctx, args):
-        name = " ".join(args).strip("!")
-        comm: Command = self.bot.get_command(name)
-        if comm is None:
-            return await ctx.send(
-                f"La commande `!{name}` n'existe pas. "
-                f"Utilise `!help` pour une liste des commandes."
-            )
-        elif isinstance(comm, Group):
-            return await self.send_group_help(ctx, comm)
-
-        embed = discord.Embed(
-            title=f"Aide pour la commande `!{comm.qualified_name}`",
-            description=comm.help,
-            color=EMBED_COLOR,
-        )
-
-        if comm.aliases:
-            aliases = ", ".join(f"`{a}`" for a in comm.aliases)
-            embed.add_field(name="Alias", value=aliases, inline=True)
-        if comm.signature:
-            embed.add_field(
-                name="Usage", value=f"`!{comm.qualified_name} {comm.signature}`"
-            )
-        embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
-
-        return await ctx.send(embed=embed)
-
-    async def send_group_help(self, ctx, group: Group):
-        embed = discord.Embed(
-            title=f"Aide pour le groupe de commandes `!{group.qualified_name}`",
-            description=group.help,
-            color=EMBED_COLOR,
-        )
-
-        comms = await self.filter_commands(ctx, group.commands, sort=True)
-        if not comms:
-            embed.add_field(
-                name="Désolé", value="Il n'y a aucune commande pour toi ici."
-            )
-        else:
-            names = ["!" + c.qualified_name for c in comms]
-            width = max(map(len, names))
-            just_names = [name.rjust(width) for name in names]
-            short_help = [c.short_doc for c in comms]
-
-            lines = [f"`{n}` - {h}" for n, h in zip(just_names, short_help)]
-
-            c: Command
-            text = "\n".join(lines)
-            embed.add_field(name="Sous-commandes", value=text, inline=False)
-
-            if group.aliases:
-                aliases = ", ".join(f"`{a}`" for a in group.aliases)
-                embed.add_field(name="Alias", value=aliases, inline=True)
-            if group.signature:
-                embed.add_field(
-                    name="Usage", value=f"`!{group.qualified_name} {group.signature}`"
-                )
-
-            embed.add_field(
-                name="Plus d'aide",
-                value=f"Pour plus de détails sur une commande, "
-                      f"il faut écrire `!help COMMANDE` en remplaçant "
-                      f"COMMANDE par le nom de la commande qui t'intéresse.\n"
-                      f"Exemple: `!help {random.choice(names)[1:]}`",
-            )
-        embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
-
-        return await ctx.send(embed=embed)
-
-    def _name(self, command: Command):
-        return f"`!{command.qualified_name}`"
-
-    async def filter_commands(self, ctx, commands, *, sort=False, key=None):
-        """|coro|
-
-        Returns a filtered list of commands and optionally sorts them.
-
-        This takes into account the :attr:`verify_checks` and :attr:`show_hidden`
-        attributes.
-
-        Parameters
-        ------------
-        commands: Iterable[:class:`Command`]
-            An iterable of commands that are getting filtered.
-        sort: :class:`bool`
-            Whether to sort the result.
-        key: Optional[Callable[:class:`Command`, Any]]
-            An optional key function to pass to :func:`py:sorted` that
-            takes a :class:`Command` as its sole parameter. If ``sort`` is
-            passed as ``True`` then this will default as the command name.
-
-        Returns
-        ---------
-        List[:class:`Command`]
-            A list of commands that passed the filter.
-        """
-
-        if sort and key is None:
-            key = lambda c: c.qualified_name
-
-        iterator = (
-            commands if self.show_hidden else filter(lambda c: not c.hidden, commands)
-        )
-
-        if not self.verify_checks:
-            # if we do not need to verify the checks then we can just
-            # run it straight through normally without using await.
-            return sorted(iterator, key=key) if sort else list(iterator)
-
-        # if we're here then we need to check every command if it can run
-        async def predicate(cmd):
-            try:
-                return await cmd.can_run(ctx)
-            except CommandError:
-                return False
-
-        ret = []
-        for cmd in iterator:
-            valid = await predicate(cmd)
-            if valid:
-                ret.append(cmd)
-
-        if sort:
-            ret.sort(key=key)
-        return ret
 
     @command(name="Diego", hidden=True)
     async def diego_cmd(self, ctx):

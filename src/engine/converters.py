@@ -70,7 +70,10 @@ class Converter:
     def assert_guild(self, guild: Optional[Guild]):
         """Raise a value error if the guild is none."""
         if guild is None:
-            raise ValueError(f"`{guild}` is not a valid guild but {self} requires a guild.")
+            raise ValueError(
+                f"`{guild}` is not a valid guild but {self} requires a guild."
+            )
+
 
 class IntConverter(Converter):
     raw_type = int
@@ -79,6 +82,7 @@ class IntConverter(Converter):
 
 class AnyConverter(Converter):
     """Do nothing converter. Leaves objects unchanged."""
+
     raw_type = object
     nice_type = object
 
@@ -115,7 +119,9 @@ class ChannelConverter(Converter):
     def to_raw(self, nice: nice_type):
         return nice.id
 
-    def to_nice(self, raw: raw_type, guild: Optional[Guild]) -> Union[TextChannel, VoiceChannel]:
+    def to_nice(
+        self, raw: raw_type, guild: Optional[Guild]
+    ) -> Union[TextChannel, VoiceChannel]:
         if self.force_guild:
             self.assert_guild(guild)
             iterator = lambda: guild.channels
@@ -207,8 +213,11 @@ class MemberConverter(Converter):
             mem = guild.get_member_named(raw)
 
             # Then casefold name/display_name
-            mem = mem or get_casefold(guild.members, name=raw) \
-                  or get_casefold(guild.members, display_name=raw)
+            mem = (
+                mem
+                or get_casefold(guild.members, name=raw)
+                or get_casefold(guild.members, display_name=raw)
+            )
 
             if mem:
                 return mem
@@ -234,8 +243,7 @@ class RoleConverter(Converter):
         self.assert_guild(guild)
 
         if isinstance(raw, str):
-            role = get(guild.roles, name=raw) \
-                   or get_casefold(guild.roles, name=raw)
+            role = get(guild.roles, name=raw) or get_casefold(guild.roles, name=raw)
             if role:
                 return role
 
@@ -252,7 +260,7 @@ class ListOf(Converter):
     raw_type = list
     nice_type = list
 
-    def __init__(self, type_: Type=object):
+    def __init__(self, type_: Type = object):
         self.inner_type = to_converter(type_)
 
     def __repr__(self):
@@ -283,7 +291,10 @@ class DictOf(Converter):
         return f"DictOf({self.key_type} -> {self.value_type})"
 
     def to_raw(self, nice: nice_type):
-        return {self.key_type.to_raw(key): self.value_type.to_raw(val) for key, val in nice.items()}
+        return {
+            self.key_type.to_raw(key): self.value_type.to_raw(val)
+            for key, val in nice.items()
+        }
 
     def to_nice(self, raw: raw_type, guild: Optional[Guild]):
         return {
@@ -292,15 +303,23 @@ class DictOf(Converter):
         }
 
     def is_nice(self, value: Union[raw_type, nice_type]) -> bool:
-        return all(self.key_type.is_nice(key) and self.value_type.is_nice(val) for key, val in value.items())
+        return all(
+            self.key_type.is_nice(key) and self.value_type.is_nice(val)
+            for key, val in value.items()
+        )
 
     def is_raw(self, value):
-        return all(self.key_type.is_raw(key) and self.value_type.is_raw(val) for key, val in value.items())
+        return all(
+            self.key_type.is_raw(key) and self.value_type.is_raw(val)
+            for key, val in value.items()
+        )
 
 
 class DataclassConverter(Converter):
     raw_type = dict
-    nice_type = type("dataclass", (), {})  # Filling value, dataclasses don't have a base class.
+    nice_type = type(
+        "dataclass", (), {}
+    )  # Filling value, dataclasses don't have a base class.
 
     def __init__(self, dataclass):
         self.dataclass = dataclass
@@ -319,25 +338,33 @@ class DataclassConverter(Converter):
         }
 
     def to_nice(self, raw: raw_type, guild: Optional[Guild]):
-        return self.dataclass(**{
-            field: conv.to_nice(raw[field], guild)
-            for field, conv in self.converters.items()
-        })
+        return self.dataclass(
+            **{
+                field: conv.to_nice(raw[field], guild)
+                for field, conv in self.converters.items()
+            }
+        )
 
     def is_nice(self, value: Union[raw_type, nice_type]) -> bool:
         return is_dataclass(value)
 
 
 def all_subclasses(cls):
-    return set(cls.__subclasses__()).union(
-        [s for c in cls.__subclasses__() for s in all_subclasses(c)]).union({cls})
+    return (
+        set(cls.__subclasses__())
+        .union([s for c in cls.__subclasses__() for s in all_subclasses(c)])
+        .union({cls})
+    )
 
 
 def to_converter(nice_type: Union[Type, Converter]) -> Converter:
     if is_dataclass(nice_type):
         return DataclassConverter(nice_type)
 
-    if isinstance(nice_type, Converter) or nice_type.__class__.__base__.__name__ == "Converter":
+    if (
+        isinstance(nice_type, Converter)
+        or nice_type.__class__.__base__.__name__ == "Converter"
+    ):
         ### I HAVE NO FREAKING IDEA WHY DICTOF DOES NOT WORK HERE.....
         return nice_type
 
@@ -348,7 +375,7 @@ def to_converter(nice_type: Union[Type, Converter]) -> Converter:
     raise ValueError(f"No converter from {nice_type} found ")
 
 
-def to_raw(value, nice_type: Union[Type, Converter]=None):
+def to_raw(value, nice_type: Union[Type, Converter] = None):
     if nice_type is None:
         nice_type = type(value)
 

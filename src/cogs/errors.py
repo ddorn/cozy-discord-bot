@@ -9,7 +9,7 @@ from discord.utils import maybe_coroutine
 
 from src.constants import Channels
 from src.engine import CustomBot
-from engine.errors import EpflError
+from engine.errors import CozyError
 
 # Global variable and function because I'm too lazy to make a metaclass
 from engine.utils import myembed, with_max_len, py, fg
@@ -40,7 +40,7 @@ def eprint(*args, **kwargs):
 class ErrorsCog(Cog):
     """This cog defines all the handles for errors."""
 
-    DONT_LOG = CommandNotFound,
+    DONT_LOG = (CommandNotFound,)
     """Tuple of Exception classes to not log to discord"""
 
     def __init__(self, bot: CustomBot):
@@ -59,7 +59,9 @@ class ErrorsCog(Cog):
             if handler:
                 return handler
 
-        raise RuntimeError(f"No handler for exception {exc}. Bases: {exc.__class__.__mro__}")
+        raise RuntimeError(
+            f"No handler for exception {exc}. Bases: {exc.__class__.__mro__}"
+        )
 
     def error_print(self, exc, *args):
         if isinstance(exc, CommandInvokeError):
@@ -78,7 +80,7 @@ class ErrorsCog(Cog):
                 eprint("Caused by:")
         eprint("-" * 12)
 
-    def error_embed(self, exc: Exception, event='', **fields):
+    def error_embed(self, exc: Exception, event="", **fields):
         if isinstance(exc, CommandInvokeError):
             exc = exc.original
 
@@ -90,15 +92,16 @@ class ErrorsCog(Cog):
         # errors = reversed(errors)
 
         embed = myembed(
-            f"A {exc.__class__.__name__} happened" + f' during {event} event' * bool(event),
+            f"A {exc.__class__.__name__} happened"
+            + f" during {event} event" * bool(event),
             py("\n from: ".join(repr(e) for e in errors)),
             time=datetime.now().ctime(),
-            **fields
+            **fields,
         )
 
         for i, exc in enumerate(errors):
             embed.add_field(
-                name=f'Traceback of {exc.__class__.__name__}',
+                name=f"Traceback of {exc.__class__.__name__}",
                 value=py(with_max_len(self.get_tb(exc))),
                 inline=False,
             )
@@ -138,20 +141,15 @@ class ErrorsCog(Cog):
         if isinstance(exc, self.DONT_LOG):
             return
 
-        embed = self.error_embed(
-            exc,
-            event,
-            args=pformat(args),
-            kwargs=pformat(kwargs)
-        )
+        embed = self.error_embed(exc, event, args=pformat(args), kwargs=pformat(kwargs))
         await self.bot.get_channel(Channels.LOG_CHANNEL).send(embed=embed)
 
     @handles(Exception)
     def on_exception(self, ctx, exc):
         return str(exc)
 
-    @handles(EpflError)
-    def on_epfl_error(self, ctx: Context, error: EpflError):
+    @handles(CozyError)
+    def on_epfl_error(self, ctx: Context, error: CozyError):
         return error.message
 
     @handles(CommandInvokeError)
@@ -164,9 +162,9 @@ class ErrorsCog(Cog):
         eprint(fg(f"No specific handler for {error.original.__class__.__name__}."))
 
         return (
-                error.original.__class__.__name__
-                + ": "
-                + (str(error.original) or str(error))
+            error.original.__class__.__name__
+            + ": "
+            + (str(error.original) or str(error))
         )
 
     @handles(CommandNotFound)
@@ -185,7 +183,9 @@ class ErrorsCog(Cog):
 
     @handles(BadArgument)
     def on_bad_argument(self, ctx: Context, error: BadArgument):
-        self.bot.loop.create_task(ctx.invoke(self.bot.get_command("help"), ctx.command.qualified_name))
+        self.bot.loop.create_task(
+            ctx.invoke(self.bot.get_command("help"), ctx.command.qualified_name)
+        )
 
         return str(error)
 

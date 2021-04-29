@@ -7,7 +7,7 @@ from discord.ext.commands import Cog, command, Context
 
 from src.constants import File, Emoji
 from src.engine import CustomBot
-from engine.errors import EpflError
+from engine.errors import CozyError
 from engine.utils import remove_mentions_as
 
 
@@ -41,10 +41,7 @@ class RemindCog(Cog, name="Reminders"):
         }
 
     def save(self):
-        j = {
-            date.timestamp() : x
-            for date, x in self.reminders.items()
-        }
+        j = {date.timestamp(): x for date, x in self.reminders.items()}
         File.REMINDERS.write_text(json.dumps(j))
 
     async def check_reminders(self):
@@ -83,10 +80,10 @@ class RemindCog(Cog, name="Reminders"):
         when, ok = self.cal.parseDT(when, now)
 
         if not ok:
-            raise EpflError("Sorry, I could not parse the date.")
+            raise CozyError("Sorry, I could not parse the date.")
 
         if when < now - timedelta(seconds=1):
-            raise EpflError("The date is already passed.")
+            raise CozyError("The date is already passed.")
 
         what = remove_mentions_as(ctx.author, ctx.channel, what)
 
@@ -98,6 +95,8 @@ class RemindCog(Cog, name="Reminders"):
 
 
 __cog = None
+
+
 def setup(bot: CustomBot):
     global __cog
     __cog = RemindCog(bot)

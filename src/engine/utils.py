@@ -3,17 +3,17 @@ from functools import wraps
 from io import StringIO
 from pprint import pprint
 from time import time
-from typing import Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import discord
 import psutil
-from discord import Guild, Member, TextChannel
+from constants import MAIN_GUILD
+from discord import Member, TextChannel
 from discord.ext import commands
 from discord.ext.commands import Bot, Context, MissingRole, NoPrivateMessage
 from discord.utils import get
-
+from engine.errors import CozyOnlyError
 from src.constants import *
-from engine.errors import EplfOnlyError, ConfigUndefined
 
 if TYPE_CHECKING:
     pass
@@ -36,7 +36,7 @@ def py(txt):
     return f"```py\n{txt}```"
 
 
-def french_join(l, last_link="et", sep=', '):
+def french_join(l, last_link="et", sep=", "):
     l = list(l)
     if not l:
         return ""
@@ -58,7 +58,7 @@ def mentions_to_id(s: str) -> str:
 def remove_mentions_as(member: Member, chan: TextChannel, text: str) -> str:
     if not member.permissions_in(chan).mention_everyone:
         # Escape only @everyone/@here
-        text = re.sub(r'@(everyone|here)', '@\u200b\\1', text)
+        text = re.sub(r"@(everyone|here)", "@\u200b\\1", text)
         # escape roles mentions if not mentionable
         for match in re.finditer(r"<@&([0-9]{17,21})>", text):
             mention_id = int(match.group(1))
@@ -134,9 +134,9 @@ async def confirm(ctx, bot, prompt="", **kwargs):
 
     def check(reaction: discord.Reaction, u):
         return (
-                ctx.author == u
-                and msg.id == reaction.message.id
-                and str(reaction.emoji) in (Emoji.CHECK, Emoji.CROSS)
+            ctx.author == u
+            and msg.id == reaction.message.id
+            and str(reaction.emoji) in (Emoji.CHECK, Emoji.CROSS)
         )
 
     reaction, u = await bot.wait_for("reaction_add", check=check)
@@ -180,11 +180,7 @@ def myembed(title, descr="", color=EMBED_COLOR, **fields):
     Underscores are replaced with spaces in fields names.
     """
 
-    embed = discord.Embed(
-        color=color,
-        title=title,
-        description=descr,
-    )
+    embed = discord.Embed(color=color, title=title, description=descr,)
 
     for name, value in fields.items():
         if value not in (None, ""):
@@ -212,7 +208,7 @@ def with_max_len(string: Union[str, StringIO], maxi=1000) -> str:
         string = string.read()
 
     if len(string) > maxi:
-        string = string[:maxi // 2 - 3] + "\n...\n" + string[-maxi // 2 + 3:]
+        string = string[: maxi // 2 - 3] + "\n...\n" + string[-maxi // 2 + 3 :]
 
     return string
 
@@ -228,14 +224,18 @@ def official_guild():
     """A check that passes only of the command is invoked in the EPFL Community guild."""
 
     def predicate(ctx: Context):
-        if ctx.guild is None or ctx.guild.id != EPFL_GUILD:
-            raise EplfOnlyError()
+        if ctx.guild is None or ctx.guild.id != MAIN_GUILD:
+            raise CozyOnlyError()
         return True
 
     return commands.check(predicate)
 
 
 def check_role(item):
+    """Check for wether the author has the corresponding role.
+
+    Always return true for the guild owner.
+    """
 
     def predicate(ctx: Context):
 

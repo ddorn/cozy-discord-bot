@@ -58,6 +58,7 @@ class Emoji:
     CROSS = "❌"
     PLUS_1 = "👍"
     MINUS_1 = "👎"
+    RAINBOW_HEART = "<:rainbowheart:837416173603520522>"
 
 
 class File:
@@ -68,6 +69,8 @@ class File:
     REMINDERS = DATA / "reminders"
     RULES = DATA / "rules.yaml"
     CONFIG = DATA / "config.yaml"
+    MEMES = DATA / "memes"
+    JOKES_V2 = DATA / "jokes.yaml"
 
 
 def setup(_):

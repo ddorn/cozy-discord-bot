@@ -3,12 +3,11 @@ from discord.ext.commands import Context, command, has_role
 from src.engine import to_nice
 from src.engine import CustomCog, CustomBot
 from src.constants import *
-from engine.errors import EpflError
+from engine.errors import CozyError
 from engine.utils import myembed
 
 
 class SettingsCog(CustomCog, name="Settings"):
-
     @command(name="settings", aliases=["list-settings", "ls"])
     @has_role(Role.MODO)
     async def settings_list_cmd(self, ctx: Context):
@@ -36,8 +35,7 @@ class SettingsCog(CustomCog, name="Settings"):
         await ctx.send(embed=embed)
 
     @command(
-        name="set",
-        usage="!set group.setting VALUE",
+        name="set", usage="!set group.setting VALUE",
     )
     @has_role(Role.MODO)
     async def set_cmd(self, ctx: Context, name: str, *, value: str):
@@ -52,14 +50,18 @@ class SettingsCog(CustomCog, name="Settings"):
             if cog.name() == cog_name:
                 break
         else:
-            raise EpflError(f"Il n'y a pas de groupe de commandes qui s'appelle `{cog_name}`. "
-                            "`!settings` done une liste des réglages possibles.")
+            raise CozyError(
+                f"Il n'y a pas de groupe de commandes qui s'appelle `{cog_name}`. "
+                "`!settings` done une liste des réglages possibles."
+            )
 
         with cog.config(ctx.guild) as conf:
             # Not description => not settable
             if setting not in conf or not conf.descr(setting):
-                raise EpflError(f"{cog_name} n'a pas de réglage {setting}. "
-                                f"`!settings` done une liste des possibilités.")
+                raise CozyError(
+                    f"{cog_name} n'a pas de réglage {setting}. "
+                    f"`!settings` done une liste des possibilités."
+                )
 
             nice = to_nice(value, conf.type_of(setting), ctx.guild)
             conf[setting] = nice
