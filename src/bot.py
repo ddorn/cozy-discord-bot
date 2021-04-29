@@ -1,9 +1,11 @@
 #!/bin/python
+from itertools import chain
+
 from discord import Intents, MemberCacheFlags
 from discord_slash import SlashCommand
 
 from src.constants import *
-from src.core import CustomBot
+from .engine import CustomBot
 
 
 def start():
@@ -15,14 +17,10 @@ def start():
     # We have our own help command, so remove the existing one before loading it
     bot.remove_command("help")
 
-    # Load all cogs in File.COGS
-    for cog in File.COGS.glob("*.py"):
-        if cog.name.startswith("_"): continue
-        bot.load_extension(cog.relative_to(File.TOP_LEVEL).as_posix().replace("/", ".")[:-3])
-    bot.load_extension("src.errors")
-    bot.load_extension("src.utils")
-    bot.load_extension("src.constants")
-    bot.load_extension("src.converters")
+    # Load all cogs in File.COGS and engine/
+    for cog in chain(File.COGS.glob("*.py"), (File.TOP_LEVEL / "engine").glob("*.py")):
+        if not cog.name.startswith("_"):
+            bot.load_extension(cog.relative_to(File.TOP_LEVEL).as_posix().replace("/", ".")[:-3])
 
     # Let's goooo
     bot.run(DISCORD_TOKEN)

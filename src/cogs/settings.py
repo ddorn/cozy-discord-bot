@@ -1,10 +1,10 @@
 from discord.ext.commands import Context, command, has_role
 
-from src.converters import to_nice
-from src.core import CustomCog, CustomBot
+from src.engine import to_nice
+from src.engine import CustomCog, CustomBot
 from src.constants import *
-from src.errors import EpflError
-from src.utils import myembed
+from engine.errors import EpflError
+from engine.utils import myembed
 
 
 class SettingsCog(CustomCog, name="Settings"):

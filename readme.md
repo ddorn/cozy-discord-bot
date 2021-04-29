@@ -1,6 +1,6 @@
-# EPFL Discord Bot
+# Cozy Discord Bot
 
-Actually does not do much, except run an interpreter for the owner.
+Doesn't do much yet, except run an interpreter for the owner.
 To see an interesting bot, got to [tfjm-discord-bot](https://gitlab.com/ddorn/tfjm-discord-bot)
 
 ### Install and run
@@ -9,11 +9,8 @@ One needs poetry to install the dependencies easily.
 
 ```sh
 poetry install
-poetry shell
+poetry run python bot.py
 ```
-
-Once in the shell, you can use `python bot.py` to start it.
-
 
 ##### Nix and direnv
 

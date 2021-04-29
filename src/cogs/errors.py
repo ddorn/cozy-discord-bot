@@ -2,18 +2,17 @@ import sys
 import traceback
 from datetime import datetime
 from io import StringIO
-from pprint import pprint, pformat
+from pprint import pformat
 
-import discord
 from discord.ext.commands import *
 from discord.utils import maybe_coroutine
 
 from src.constants import Channels
-from src.core import CustomBot
-from src.errors import EpflError
+from src.engine import CustomBot
+from engine.errors import EpflError
 
 # Global variable and function because I'm too lazy to make a metaclass
-from src.utils import myembed, with_max_len, py, french_join, fg
+from engine.utils import myembed, with_max_len, py, fg
 
 handlers = {}
 

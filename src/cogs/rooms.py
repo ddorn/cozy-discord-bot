@@ -3,9 +3,9 @@ from discord.ext.commands import BadArgument, Context, group, TextChannelConvert
     ChannelNotFound
 
 from src.constants import DIEGO_MENTION
-from src.core import CogConfig, CustomCog
-from src.errors import EpflError
-from src.utils import myembed
+from src.engine import CogConfig, CustomCog
+from engine.errors import EpflError
+from engine.utils import myembed
 
 
 class RoomsCog(CustomCog, name="Private Channels"):

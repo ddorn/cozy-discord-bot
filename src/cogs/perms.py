@@ -12,9 +12,9 @@ from discord.abc import GuildChannel
 from discord.ext.commands import (Cog, Context, group, has_role)
 
 from src.constants import *
-from src.core import CustomBot, CustomCog, CogConfig
-from src.errors import EpflError
-from src.utils import confirm, french_join, mentions_to_id, myembed, report_progress
+from engine import CustomBot, CustomCog, CogConfig
+from engine.errors import EpflError
+from engine.utils import confirm, french_join, mentions_to_id, myembed, report_progress
 
 RoleOrChan = Union[discord.Role, GuildChannel]
 
@@ -103,7 +103,8 @@ class RuleSet(dict):
 
     @classmethod
     def load(cls):
-        rules = yaml.safe_load(File.RULES.read_text())
+        File.RULES.touch()
+        rules = yaml.safe_load(File.RULES.read_text() or "{}")
         
         return cls({item: Rule(r) for item, r in rules.items()})
 

@@ -1,15 +1,14 @@
-import dataclasses
 from dataclasses import is_dataclass
-from typing import Any, Type, TYPE_CHECKING, Union, Dict, Optional
+from typing import Type, TYPE_CHECKING, Union, Dict, Optional
 
 import discord
 from discord import CategoryChannel, Guild, TextChannel, VoiceChannel, Member
-from discord.utils import get, find
+from discord.utils import get
 
-from src.utils import mentions_to_id, get_casefold
+from engine.utils import mentions_to_id, get_casefold
 
 if TYPE_CHECKING:
-    from src.core import CustomBot
+    from src.engine import CustomBot
 
 __all__ = ["to_raw", "to_nice"]
 

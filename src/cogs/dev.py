@@ -5,30 +5,22 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pprint import pprint
 from textwrap import indent
-from typing import Union
 
 import discord
-from discord import TextChannel, PermissionOverwrite, Message, ChannelType
+from discord import TextChannel, Message, ChannelType
 from discord.embeds import EmptyEmbed
 from discord.ext.commands import (
     command,
-    guild_only, has_role,
+    has_role,
     Cog,
     ExtensionNotLoaded,
     Context,
     is_owner,
     ExtensionFailed)
-from discord.utils import get
-from discord_slash import SlashContext
-from discord_slash.cog_ext import cog_slash
-from discord_slash.utils.manage_commands import create_option
-from discord_slash.model import SlashCommandOptionType as OType
 from ptpython.repl import embed
 
 from src.constants import *
-from src.core import CustomBot
-from src.errors import EpflError
-from src.utils import fg, french_join, myembed, send_all, with_max_len, pprint_send, py
+from engine import CustomBot, EpflError, fg, french_join, send_all, with_max_len, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",

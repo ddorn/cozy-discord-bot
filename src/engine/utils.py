@@ -3,7 +3,7 @@ from functools import wraps
 from io import StringIO
 from pprint import pprint
 from time import time
-from typing import Optional, Union, Type, TYPE_CHECKING
+from typing import Optional, Union, TYPE_CHECKING
 
 import discord
 import psutil
@@ -13,10 +13,10 @@ from discord.ext.commands import Bot, Context, MissingRole, NoPrivateMessage
 from discord.utils import get
 
 from src.constants import *
-from src.errors import EplfOnlyError, ConfigUndefined
+from engine.errors import EplfOnlyError, ConfigUndefined
 
 if TYPE_CHECKING:
-    from src.core import CogConfig, Undefined
+    pass
 
 
 def fg(text, color: int = 0xFFA500):
@@ -215,16 +215,6 @@ def with_max_len(string: Union[str, StringIO], maxi=1000) -> str:
         string = string[:maxi // 2 - 3] + "\n...\n" + string[-maxi // 2 + 3:]
 
     return string
-
-
-def section(m: discord.Member) -> Optional[str]:
-    """Get the section sigle for a member."""
-
-    for s in SECTIONS:
-        for r in m.roles:
-            if r.name.startswith(s):
-                return s
-    return None
 
 
 def start_time():

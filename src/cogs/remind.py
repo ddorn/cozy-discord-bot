@@ -1,20 +1,14 @@
 import asyncio
 import json
-import re
 from datetime import datetime, timedelta
-from threading import Thread
 
-import discord
 import parsedatetime
-from discord import Member, Guild
-from discord.abc import GuildChannel
-from discord.ext.commands import Cog, group, command, Context
-from discord.utils import escape_mentions, get
+from discord.ext.commands import Cog, command, Context
 
 from src.constants import File, Emoji
-from src.core import CustomBot
-from src.errors import EpflError
-from src.utils import send_all, pprint_send, remove_mentions_as
+from src.engine import CustomBot
+from engine.errors import EpflError
+from engine.utils import remove_mentions_as
 
 
 class RemindCog(Cog, name="Reminders"):

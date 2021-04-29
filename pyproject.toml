@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "epfl-discord-bot"
+name = "cozy-discord-bot"
 version = "0.1.0"
-description = "Utility bot for the EPFL 2020-2021 server"
+description = "Cool bot for CozyFractal's server"
 authors = ["ddorn <diego.dorn@free.fr>"]
 
 [tool.poetry.dependencies]

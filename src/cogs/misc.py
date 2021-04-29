@@ -17,10 +17,10 @@ from typing import List
 
 import aiohttp
 import discord
-from discord import AllowedMentions, ChannelType, Guild, Member, PermissionOverwrite, Permissions, TextChannel
+from discord import AllowedMentions, ChannelType, Guild, Member, PermissionOverwrite, TextChannel
 from discord.abc import GuildChannel
 from discord.ext import commands
-from discord.ext.commands import (Cog, command, Command, CommandError, Context, Group, guild_only)
+from discord.ext.commands import (command, Command, CommandError, Context, Group, guild_only)
 from discord.utils import get, find
 from discord_slash import SlashCommandOptionType, SlashContext
 from discord_slash.cog_ext import cog_slash
@@ -28,9 +28,7 @@ from discord_slash.utils.manage_commands import create_option
 
 from src.cogs.perms import RuleSet
 from src.constants import *
-from src.core import CustomBot, CustomCog, CogConfig
-from src.errors import EpflError
-from src.utils import french_join, mentions_to_id, myembed, section, start_time, with_max_len, official_guild
+from engine import CustomBot, CustomCog, CogConfig, EpflError, french_join, mentions_to_id, myembed, start_time, with_max_len
 
 # supported operators
 OPS = {
@@ -127,18 +125,14 @@ class MiscCog(CustomCog, name="Divers"):
 
     async def send_server_info(self, ctx):
         guild: Guild = ctx.guild
-        embed = discord.Embed(title="État du serveur", color=EMBED_COLOR)
-        in_sections = [g for g in guild.members if section(g) is not None]
-        no_year = [g for g in guild.members if get(g.roles, name="No year")]
+        embed = discord.Embed(title="Server info", color=EMBED_COLOR)
         uptime = datetime.timedelta(seconds=round(time() - start_time()))
         text = len(guild.text_channels)
         vocal = len(guild.voice_channels)
         infos = {
-            "Etudiants": len(in_sections),
-            "Sans année": len(no_year),
-            "Membres": len(guild.members),
-            "Salons texte": text,
-            "Salons vocaux": vocal,
+            "Members": len(guild.members),
+            "Text channels": text,
+            "Voice channels": vocal,
             "Nombres de roles": len(guild.roles),
             "Bot uptime": uptime,
         }
