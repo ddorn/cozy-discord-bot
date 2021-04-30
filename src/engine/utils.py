@@ -172,7 +172,7 @@ async def report_progress(it, ctx, descr="Progress", mini=50, step=10):
         )
 
 
-def myembed(title, descr="", color=EMBED_COLOR, **fields):
+def myembed(title="", descr="", color=EMBED_COLOR, **fields):
     """
     Create an embed in one function.
 

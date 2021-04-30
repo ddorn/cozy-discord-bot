@@ -541,7 +541,7 @@ class MiscCog(CustomCog, name="Divers"):
 
             self.save_jokes(jokes)
 
-    @joke.command(name="top", hidden=True)
+    @joke.command(name="top")
     @check_role(Role.MODO)
     async def best_jokes(self, ctx: Context):
         """Affiche le palmares des blagues."""

@@ -88,6 +88,7 @@ class DevCog(Cog, name="Dev tools"):
         await ctx.send("Tout va mieux !")
 
     @command()
+    @is_owner()
     async def byebye(self, ctx):
         """Exit the bot."""
         raise SystemExit()

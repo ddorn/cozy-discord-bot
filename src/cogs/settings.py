@@ -1,4 +1,5 @@
 from discord.ext.commands import Context, command, has_role
+from engine import check_role
 
 from src.engine import to_nice
 from src.engine import CustomCog, CustomBot
@@ -9,7 +10,7 @@ from engine.utils import myembed
 
 class SettingsCog(CustomCog, name="Settings"):
     @command(name="settings", aliases=["list-settings", "ls"])
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     async def settings_list_cmd(self, ctx: Context):
         """List all settings with their values."""
         embed = myembed("All settings")
@@ -37,7 +38,7 @@ class SettingsCog(CustomCog, name="Settings"):
     @command(
         name="set", usage="!set group.setting VALUE",
     )
-    @has_role(Role.MODO)
+    @check_role(Role.MODO)
     async def set_cmd(self, ctx: Context, name: str, *, value: str):
         """(modo) Configure the bot's settings."""
 

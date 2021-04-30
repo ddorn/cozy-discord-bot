@@ -25,7 +25,7 @@ def start():
     bot.remove_command("help")
 
     # Load all cogs in File.COGS and engine/
-    for cog in chain(File.COGS.glob("*.py"), (File.TOP_LEVEL / "engine").glob("*.py")):
+    for cog in chain(File.COGS.glob("*.py"), File.ENGINE.glob("*.py")):
         if not cog.name.startswith("_"):
             bot.load_extension(
                 cog.relative_to(File.TOP_LEVEL).as_posix().replace("/", ".")[:-3]

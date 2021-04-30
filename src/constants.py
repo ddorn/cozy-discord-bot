@@ -63,6 +63,7 @@ class Emoji:
 
 class File:
     TOP_LEVEL = Path(__file__).parent.parent
+    ENGINE = TOP_LEVEL / "src" / "engine"
     COGS = TOP_LEVEL / "src" / "cogs"
     DATA = TOP_LEVEL / "data"
     HUGS = TOP_LEVEL / "data" / "hugs"

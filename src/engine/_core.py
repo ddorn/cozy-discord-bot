@@ -1,3 +1,7 @@
+"""
+This file is prefixed with a _ to avoid loading it as and extension.
+"""
+
 import asyncio
 import sys
 from datetime import datetime
@@ -304,7 +308,7 @@ class CustomBot(Bot):
             raise
         print("The bot has reloaded !")
 
-    async def wait_for_bin(bot: Bot, user: User, *msgs: Message, timeout=300):
+    async def wait_for_bin(self, user: User, *msgs: Message, timeout=300):
         """Wait for timeout seconds for `user` to delete the messages."""
 
         msgs = list(msgs)
@@ -316,15 +320,14 @@ class CustomBot(Bot):
 
         def check(reaction: Reaction, u):
             return (
-                user == u
-                or user == OWNER
+                (user == u or user == OWNER)
                 and any(m.id == reaction.message.id for m in msgs)
                 and str(reaction.emoji) == Emoji.BIN
             )
 
         try:
             while msgs:
-                reaction, u = await bot.wait_for(
+                reaction, u = await self.wait_for(
                     "reaction_add", check=check, timeout=timeout
                 )
 
