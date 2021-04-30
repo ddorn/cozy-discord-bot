@@ -73,10 +73,18 @@ class ModCog(CustomCog, name="Moderation"):
                 new.send_messages = False
                 await chan.set_permissions(who, overwrite=new)
 
+            # on public channels, we still need to prevent everyone from sending
+            if ctx.guild.default_role not in perms:
+                await chan.set_permissions(ctx.guild.default_role, send_messages=False)
+
             await self.bot.wait_for_bin(ctx.author, msg, timeout=duration)
         finally:
             for who, perm in perms.items():
                 await chan.set_permissions(who, overwrite=perm)
+
+            # on public channels, we also need to revert
+            if ctx.guild.default_role not in perms:
+                await chan.set_permissions(ctx.guild.default_role, overwrite=None)
 
     # ------------- Send / Del -------------- #
 
