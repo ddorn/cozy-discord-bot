@@ -1,5 +1,7 @@
 import os
+import sys
 from pathlib import Path
+import argparse
 
 __all__ = [
     "DISCORD_TOKEN",
@@ -18,28 +20,35 @@ __all__ = [
     "PREFIX",
 ]
 
-DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
+
+parser = argparse.ArgumentParser()
+parser.add_argument("token", help="Discord secret token.", metavar="DISCORD_TOKEN")
+parser.add_argument("--test", "-t", action="store_true")
+args = parser.parse_args()
+
+DISCORD_TOKEN = args.token
+IS_TEST_BOT = args.test
 
 if DISCORD_TOKEN is None:
     print("No token for the bot were found.")
     print("You need to set the DISCORD_TOKEN variable in your environment")
     print("Or just run:")
     print()
-    print('    DISCORD_TOKEN="your token here" python .')
+    print('    python . "your token here"')
     print()
     quit(1)
 
 OWNER = 430566197868625920  # Diego's id
-BOT = 837400346808549417
+BOT = 837400346808549417 if not IS_TEST_BOT else 838683880604958741
 MAIN_GUILD = 822820580889853952
 DIEGO_MENTION = f"<@{OWNER}>"
 
-PREFIX = "!"
+PREFIX = "!" if not IS_TEST_BOT else "?"
 EMBED_COLOR = 0xFF0000
 FRACTAL_URL = "https://thefractal.space/img/{seed}.png?size=640"
 FRACTAL_COOLDOWN = 42  # seconds
 OWNER_NAME = "CozyFractal"
-BOT_NAME = "cozy-bot"
+BOT_NAME = "Botzy" if not IS_TEST_BOT else "Botzy Dev"
 
 
 class Role:
@@ -49,7 +58,7 @@ class Role:
 
 
 class Channels:
-    LOG_CHANNEL = 837402825784033300
+    LOG_CHANNEL = 837402825784033300 if not IS_TEST_BOT else 838717801954541599
 
 
 class Emoji:
@@ -77,6 +86,10 @@ class File:
     CONFIG = DATA / "config.yaml"
     MEMES = DATA / "memes"
     JOKES_V2 = DATA / "jokes.yaml"
+
+
+if not File.DATA.exists():
+    File.DATA.mkdir()
 
 
 def setup(_):
