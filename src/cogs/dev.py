@@ -19,7 +19,7 @@ from discord.ext.commands import (
 from ptpython.repl import embed
 
 from src.constants import *
-from engine import CustomBot, CozyError, fg, french_join, with_max_len, py
+from engine import CustomBot, CozyError, fg, french_join, myembed, with_max_len, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -185,10 +185,13 @@ class DevCog(Cog, name="Dev tools"):
                 content = content[len(p) :]
                 break
 
-        query = re.match(RE_QUERY, content).group("query")
+        match = re.match(RE_QUERY, content)
+        if not match:
+            return myembed("Your query was not understood.")
 
+        query = match.group("query")
         if not query:
-            raise CozyError("No query found.")
+            return myembed("Your query was not understood.")
 
         if any(word in query for word in ("=", "return", "await", ":", "\n")):
             lines = query.splitlines()
@@ -244,7 +247,6 @@ class DevCog(Cog, name="Dev tools"):
         if stdout:
             embed.add_field(name="Standard output", value=py(stdout), inline=False)
 
-        embed.set_footer(text="You may edit your message.")
         return embed
 
     @command(name="eval", aliases=["e"])
@@ -255,6 +257,7 @@ class DevCog(Cog, name="Dev tools"):
         self.eval_locals["ctx"] = ctx
 
         embed = await self.eval(ctx.message)
+        embed.set_footer(text="You may edit your message.")
         resp = await ctx.send(embed=embed)
 
         def check(before, after):
@@ -269,6 +272,7 @@ class DevCog(Cog, name="Dev tools"):
                 break
 
             embed = await self.eval(after)
+            embed.set_footer(text="You may edit your message.")
             await resp.edit(embed=embed)
 
         # Remove the "You may edit your message"
