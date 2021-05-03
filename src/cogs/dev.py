@@ -2,12 +2,14 @@ import asyncio
 import re
 import traceback
 from contextlib import redirect_stdout
+from dataclasses import dataclass
 from io import StringIO
 from pprint import pprint
 from textwrap import indent
+from typing import Tuple
 
 import discord
-from discord import TextChannel, Message, ChannelType
+from discord import Reaction, TextChannel, Message, ChannelType
 from discord.ext.commands import (
     command,
     Cog,
@@ -19,7 +21,17 @@ from discord.ext.commands import (
 from ptpython.repl import embed
 
 from src.constants import *
-from engine import CustomBot, CozyError, fg, french_join, myembed, with_max_len, py
+from engine import (
+    CustomBot,
+    CozyError,
+    fg,
+    french_join,
+    myembed,
+    with_max_len,
+    py,
+)
+
+from engine.utils import paginate
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -40,6 +52,98 @@ COGS_SHORTCUTS = {
 RE_QUERY = re.compile(
     r"^e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$", re.DOTALL,
 )
+
+
+@dataclass
+class EvalResult:
+    query: str
+    stdout: StringIO
+    result: object = None
+    error: Exception = None
+    page: int = 0
+
+    def get_embed(self):
+        if self.error is not None:
+            embed, pages = self.embed_for_error(self.page)
+        else:
+            embed, pages = self.embed_for_result(self.page)
+
+        # Clamp
+        self.page = max(0, min(pages - 1, self.page))
+
+        return embed, pages
+
+    def embed_for_error(self, page=0):
+        tb = StringIO()
+        traceback.print_tb(self.error.__traceback__, file=tb)
+
+        embed = discord.Embed(title=str(self.error), color=discord.Colour.red())
+        embed.add_field(name="Query", value=py(with_max_len(self.query)), inline=False)
+        embed.add_field(name="Traceback", value=py(with_max_len(tb)), inline=False)
+
+        stdout = with_max_len(self.stdout)
+        if stdout:
+            embed.add_field(name="Standard output", value=py(stdout), inline=False)
+
+        return embed, False  # TODO: support pagination here too
+
+    def embed_for_result(self, page=0):
+        out = StringIO()
+        pprint(self.result, out)
+
+        embed = discord.Embed(title="Result", color=discord.Colour.green())
+        embed.add_field(name="Query", value=py(with_max_len(self.query)), inline=False)
+
+        value, pages1 = paginate(out, page=page)
+        if self.result is not None and value:
+            embed.add_field(name="Value", value=py(value), inline=False)
+
+        stdout, pages2 = paginate(self.stdout, page=page)
+        if stdout:
+            embed.add_field(name="Standard output", value=py(stdout), inline=False)
+
+        return embed, max(pages1, pages2)
+
+    async def add_reactions(self, msg: Message, clear=False):
+        reactions = (Emoji.PREVIOUS, Emoji.NEXT)
+        for rea in reactions:
+            if clear:
+                await msg.clear_reaction(rea)
+            else:
+                await msg.add_reaction(rea)
+
+    async def handle_reaction(self, ctx, bot_msg, reaction: Reaction):
+        e = reaction.emoji
+        if e == Emoji.NEXT:
+            self.page += 1
+        elif e == Emoji.PREVIOUS:
+            self.page -= 1
+
+        await reaction.remove(ctx.author)
+
+        await self.send_embed(ctx, edit=bot_msg)
+
+    async def send_embed(self, ctx, edit=None, footer=True):
+        embed, pages = self.get_embed()
+
+        f = ""
+        if footer:
+            f = "You may edit your message. "
+        if pages > 1:
+            f += f"Page {self.page + 1}/{pages}"
+        if f:
+            embed.set_footer(text=f)
+
+        if edit is None:
+            bot_msg = await ctx.send(embed=embed)
+        else:
+            bot_msg = edit
+            await edit.edit(embed=embed)
+
+        if pages > 1:
+            await self.add_reactions(bot_msg)
+
+        return bot_msg
 
 
 class DevCog(Cog, name="Dev tools"):
@@ -169,16 +273,7 @@ class DevCog(Cog, name="Dev tools"):
 
     # ---------------- Eval ----------------- #
 
-    async def eval(self, msg: Message) -> discord.Embed:
-        # Variables for ease of access in eval
-        guild: discord.Guild = msg.guild
-        channel: TextChannel = msg.channel
-        if guild:
-            roles = guild.roles
-            members = guild.members
-            categories = guild.categories
-        send = lambda text: asyncio.create_task(channel.send(text))
-
+    async def _format_msg_for_eval(self, msg: Message) -> Tuple[str, str]:
         content: str = msg.content
         for p in await self.bot.get_prefix(msg):
             if content.startswith(p):
@@ -187,13 +282,13 @@ class DevCog(Cog, name="Dev tools"):
 
         match = re.match(RE_QUERY, content)
         if not match:
-            return myembed("Your query was not understood.")
+            raise CozyError("Your query was not understood.")
 
         query = match.group("query")
         if not query:
-            return myembed("Your query was not understood.")
+            raise CozyError("Your query was not understood.")
 
-        if any(word in query for word in ("=", "return", "await", ":", "\n")):
+        if any(word in query for word in ("=", "return", "await", ":", "\n", "import")):
             lines = query.splitlines()
             if (
                 "return" not in lines[-1]
@@ -203,16 +298,38 @@ class DevCog(Cog, name="Dev tools"):
                 lines[-1] = f"return {lines[-1]}"
                 query = "\n".join(lines)
             full_query = f"""async def query():
-    try:
-{indent(query, " " * 8)}
-    finally:
-        self.eval_locals.update(locals())
-"""
+            try:
+        {indent(query, " " * 8)}
+            finally:
+                self.eval_locals.update(locals())
+        """
 
         else:
             full_query = query
 
+        return full_query, query
+
+    def _get_globals_for_exec(self, msg):
+        # Variables for ease of access in eval
+        guild: discord.Guild = msg.guild
+        channel: TextChannel = msg.channel
+        if guild:
+            roles = guild.roles
+            members = guild.members
+            categories = guild.categories
+        send = lambda text: asyncio.create_task(channel.send(text))
         globs = {**globals(), **locals(), **self.eval_locals}
+
+        return globs
+
+    async def eval(self, msg) -> EvalResult:
+        try:
+            full_query, pretty_query = await self._format_msg_for_eval(msg)
+        except CozyError as e:
+            return myembed(e.message)
+
+        globs = self._get_globals_for_exec(msg)
+
         stdout = StringIO()
 
         try:
@@ -222,32 +339,11 @@ class DevCog(Cog, name="Dev tools"):
                     exec(full_query, globs, locs)
                     resp = await locs["query"]()
                 else:
-                    resp = eval(query, globs)
+                    resp = eval(full_query, globs)
         except Exception as e:
-            tb = StringIO()
-            traceback.print_tb(e.__traceback__, file=tb)
-
-            embed = discord.Embed(title=str(e), color=discord.Colour.red())
-            embed.add_field(
-                name="Query", value=py(with_max_len(full_query)), inline=False
-            )
-            embed.add_field(name="Traceback", value=py(with_max_len(tb)), inline=False)
+            return EvalResult(full_query, stdout, error=e)
         else:
-            out = StringIO()
-            pprint(resp, out)
-
-            embed = discord.Embed(title="Result", color=discord.Colour.green())
-            embed.add_field(name="Query", value=py(with_max_len(query)), inline=False)
-
-            value = with_max_len(out)
-            if resp is not None and value:
-                embed.add_field(name="Value", value=py(value), inline=False)
-
-        stdout = with_max_len(stdout)
-        if stdout:
-            embed.add_field(name="Standard output", value=py(stdout), inline=False)
-
-        return embed
+            return EvalResult(pretty_query, stdout, result=resp)
 
     @command(name="eval", aliases=["e"])
     @is_owner()
@@ -256,29 +352,41 @@ class DevCog(Cog, name="Dev tools"):
 
         self.eval_locals["ctx"] = ctx
 
-        embed = await self.eval(ctx.message)
-        embed.set_footer(text="You may edit your message.")
-        resp = await ctx.send(embed=embed)
+        result = await self.eval(ctx.message)
+        bot_msg = await result.send_embed(ctx)
 
         def check(before, after):
             return after.id == ctx.message.id
 
+        def check_rea(reaction: Reaction, user):
+            return user == ctx.author and reaction.message.id == bot_msg.id
+
         while True:
             try:
-                before, after = await self.bot.wait_for(
-                    "message_edit", check=check, timeout=600
+                done, pending = await asyncio.wait(
+                    [
+                        self.bot.wait_for("message_edit", check=check, timeout=600),
+                        self.bot.wait_for("reaction_add", check=check_rea, timeout=600),
+                    ],
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+
+                done = list(done)[0].result()
+                if isinstance(done[0], Reaction):
+                    reaction, user = done
+                    await result.handle_reaction(ctx, bot_msg, reaction)
+                else:
+                    before, after = done
+                    result = await self.eval(after)
+                    bot_msg = await result.send_embed(ctx, edit=bot_msg)
+
             except asyncio.TimeoutError:
                 break
 
-            embed = await self.eval(after)
-            embed.set_footer(text="You may edit your message.")
-            await resp.edit(embed=embed)
-
-        # Remove the "You may edit your message"
-        embed.set_footer()
         try:
-            await resp.edit(embed=embed)
+            # Remove the "You may edit your message"
+            await result.send_embed(ctx, edit=bot_msg, footer=False)
+            await result.add_reactions(bot_msg, clear=True)
         except discord.NotFound:
             pass
 

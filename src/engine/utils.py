@@ -1,9 +1,10 @@
 import re
 from functools import wraps
 from io import StringIO
+from math import ceil
 from pprint import pprint
 from time import time
-from typing import TYPE_CHECKING, Union
+from typing import Tuple, TYPE_CHECKING, Union
 
 import discord
 import psutil
@@ -211,6 +212,21 @@ def with_max_len(string: Union[str, StringIO], maxi=1000) -> str:
         string = string[: maxi // 2 - 3] + "\n...\n" + string[-maxi // 2 + 3 :]
 
     return string
+
+
+def paginate(string: Union[str, StringIO], maxi=1000, page=0) -> Tuple[str, int]:
+    """Give the `page` page of a text. Also return the number of pages needed."""
+    if isinstance(string, StringIO):
+        string.seek(0)
+        string = string.read()
+
+    pages = ceil(len(string) / maxi)
+    page = max(0, min(pages - 1, page))  # clamp
+
+    string = string[maxi * page : maxi * (page + 1)]
+    if page < pages - 1:
+        string += "..."
+    return string, pages
 
 
 def start_time():

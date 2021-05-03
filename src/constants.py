@@ -73,6 +73,8 @@ class Emoji:
     MINUS_1 = "👎"
     RAINBOW_HEART = "<:rainbowheart:837416127725961246>"
     PANDANGEL = "<:pandangel:834527570715607117>"
+    PREVIOUS = "◀"
+    NEXT = "▶"
 
 
 class File:
