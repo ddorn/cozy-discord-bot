@@ -1,5 +1,4 @@
 import datetime
-import datetime
 import itertools
 import random
 from itertools import chain
@@ -48,7 +47,7 @@ class InfoCog(CustomCog, name="Infos"):
     @guild_only()
     @command(name="info", aliases=["status"])
     async def info_cmd(self, ctx: Context, *, what: str = None):
-        """Affiche des informations à propos du serveur ou de l'argument."""
+        """Displays information about the server or the given argument."""
 
         if what is None:
             return await self.send_server_info(ctx)
@@ -58,9 +57,9 @@ class InfoCog(CustomCog, name="Infos"):
         what = what.strip()
 
         # Special cases
-        if what in ("ici", "here"):
+        if what in ("ici", "here", "aquí"):
             return await self.send_channel_info(ctx, ctx.channel)
-        if what in ("me", "moi"):
+        if what in ("moi", "me", "mí"):
             return await self.send_member_info(ctx, ctx.author)
 
         # Emojis first
@@ -120,7 +119,7 @@ class InfoCog(CustomCog, name="Infos"):
             "Members": len(guild.members),
             "Text channels": text,
             "Voice channels": vocal,
-            "Nombres de roles": len(guild.roles),
+            "Number of roles": len(guild.roles),
             "Bot uptime": uptime,
         }
 
@@ -139,7 +138,7 @@ class InfoCog(CustomCog, name="Infos"):
         d = age.days
 
         embed = myembed(
-            f"Info pour le role {role.name}",
+            f"Info about {role.name} role",
             "",
             role.color,
             Mention=role.mention,
@@ -158,7 +157,7 @@ class InfoCog(CustomCog, name="Infos"):
 
         member_since = datetime.datetime.now() - member.joined_at
 
-        title = f"Info pour {member.display_name}"
+        title = f"Info about {member.display_name}"
 
         embed = myembed(
             title,
@@ -180,11 +179,11 @@ class InfoCog(CustomCog, name="Infos"):
 
         crea = datetime.datetime.now() - chan.created_at
         rule = RuleSet.load().get(chan.id)
-        type = "la catégorie" if chan.type == ChannelType.category else "le salon"
+        type = "the category" if chan.type == ChannelType.category else "the channel"
         access = [m for m in ctx.guild.members if chan.permissions_for(m).read_messages]
 
         embed = myembed(
-            f"Info pour {type} {chan.name}",
+            f"Info about {type} {chan.name}",
             "",
             Link=chan.mention if isinstance(chan, TextChannel) else None,
             ID=chan.id,
@@ -216,7 +215,7 @@ class InfoCog(CustomCog, name="Infos"):
         created = datetime.datetime.now() - emoji.created_at
 
         embed = myembed(
-            f"Info pour {str(emoji)}",
+            f"Info about {str(emoji)}",
             "",
             Added=f"{created.days} day{'s' * (created.days > 1)} ago",
             Added_by=emoji.user.mention,
@@ -231,10 +230,10 @@ class InfoCog(CustomCog, name="Infos"):
 
     @command(aliases=["pong"])
     async def ping(self, ctx):
-        """Affiche la latence avec le bot."""
+        """Displays bot latency."""
 
         msg: discord.Message = ctx.message
-        rep = "Ping !" if "pong" in msg.content.lower() else "Pong !"
+        rep = "Ping!" if "pong" in msg.content.lower() else "Pong!"
 
         ping = msg.created_at.timestamp()
         msg: discord.Message = await ctx.send(rep)
@@ -242,13 +241,13 @@ class InfoCog(CustomCog, name="Infos"):
 
         delta = pong - ping
 
-        await msg.edit(content=rep + f" Ça a pris {int(1000 * (delta))}ms")
+        await msg.edit(content=rep + f" It took {int(1000 * (delta))}ms")
 
     # ----------------- Help ---------------- #
 
     @command(name="help", aliases=["h"])
     async def help_cmd(self, ctx: Context, *args):
-        """Affiche des détails à propos d'une commande."""
+        """Displays details about a command."""
 
         if not args:
             msg = await self.send_bot_help(ctx)
@@ -259,11 +258,11 @@ class InfoCog(CustomCog, name="Infos"):
 
     async def send_bot_help(self, ctx: Context):
         embed = discord.Embed(
-            title="Aide pour EPFL-bot",
-            description="Voici une liste des commandes utiles (ou pas) "
-            "sur ce serveur. Pour avoir plus de détails il "
-            "suffit d'écrire `!help COMMANDE` en remplacant `COMMANDE` "
-            "par le nom de la commande, par exemple `!help help`.",
+            title=f"Help for {BOT_NAME}",
+            description="Here is a list of useful (or not) commands "
+            "on this server. For more details just write "
+            "`!help COMMAND` replacing `COMMAND` by the name of "
+            "the command, for example`!help help`.",
             color=EMBED_COLOR,
         )
 
@@ -295,7 +294,7 @@ class InfoCog(CustomCog, name="Infos"):
             text = "\n".join(lines)
             embed.add_field(name=cat_name, value=text, inline=False)
 
-        embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
+        embed.set_footer(text=f"Suggestions? Problems? Send a message to @{OWNER_NAME}")
 
         return await ctx.send(embed=embed)
 
@@ -304,14 +303,14 @@ class InfoCog(CustomCog, name="Infos"):
         comm: Command = self.bot.get_command(name)
         if comm is None:
             return await ctx.send(
-                f"La commande `!{name}` n'existe pas. "
-                f"Utilise `!help` pour une liste des commandes."
+                f"`!{name}` command doesn't exists"
+                f"Use `!help` to get  list of commands."
             )
         elif isinstance(comm, Group):
             return await self.send_group_help(ctx, comm)
 
         embed = discord.Embed(
-            title=f"Aide pour la commande `!{comm.qualified_name}`",
+            title=f"Help for `!{comm.qualified_name}` command",
             description=comm.help,
             color=EMBED_COLOR,
         )
@@ -323,13 +322,13 @@ class InfoCog(CustomCog, name="Infos"):
             embed.add_field(
                 name="Usage", value=f"`!{comm.qualified_name} {comm.signature}`"
             )
-        embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
+        embed.set_footer(text=f"Suggestions? Problems? Send a message to @{OWNER_NAME}")
 
         return await ctx.send(embed=embed)
 
     async def send_group_help(self, ctx, group: Group):
         embed = discord.Embed(
-            title=f"Aide pour le groupe de commandes `!{group.qualified_name}`",
+            title=f"Help for the group of commands `!{group.qualified_name}`",
             description=group.help,
             color=EMBED_COLOR,
         )
@@ -337,7 +336,7 @@ class InfoCog(CustomCog, name="Infos"):
         comms = await self.filter_commands(ctx, group.commands, sort=True)
         if not comms:
             embed.add_field(
-                name="Désolé", value="Il n'y a aucune commande pour toi ici."
+                name="Sorry", value="There is no command for you here."
             )
         else:
             names = ["!" + c.qualified_name for c in comms]
@@ -349,7 +348,7 @@ class InfoCog(CustomCog, name="Infos"):
 
             c: Command
             text = "\n".join(lines)
-            embed.add_field(name="Sous-commandes", value=text, inline=False)
+            embed.add_field(name="Sub-commands", value=text, inline=False)
 
             if group.aliases:
                 aliases = ", ".join(f"`{a}`" for a in group.aliases)
@@ -360,13 +359,13 @@ class InfoCog(CustomCog, name="Infos"):
                 )
 
             embed.add_field(
-                name="Plus d'aide",
-                value=f"Pour plus de détails sur une commande, "
-                f"il faut écrire `!help COMMANDE` en remplaçant "
-                f"COMMANDE par le nom de la commande qui t'intéresse.\n"
-                f"Exemple: `!help {random.choice(names)[1:]}`",
+                name="More help",
+                value=f"For more details about a command, "
+                f"you have to write `!help COMMAND` replacing "
+                f"COMMAND with the desired command.\n"
+                f"Example: `!help {random.choice(names)[1:]}`",
             )
-        embed.set_footer(text="Suggestion ? Problème ? Envoie un message à @Diego")
+        embed.set_footer(text=f"Suggestions? Problems? Send a message to @{OWNER_NAME}")
 
         return await ctx.send(embed=embed)
 

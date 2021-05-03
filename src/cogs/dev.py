@@ -8,10 +8,8 @@ from textwrap import indent
 
 import discord
 from discord import TextChannel, Message, ChannelType
-from discord.embeds import EmptyEmbed
 from discord.ext.commands import (
     command,
-    has_role,
     Cog,
     ExtensionNotLoaded,
     Context,
@@ -21,7 +19,7 @@ from discord.ext.commands import (
 from ptpython.repl import embed
 
 from src.constants import *
-from engine import CustomBot, CozyError, fg, french_join, send_all, with_max_len, py
+from engine import CustomBot, CozyError, fg, french_join, with_max_len, py
 
 COGS_SHORTCUTS = {
     "c": "src.constants",
@@ -56,17 +54,17 @@ class DevCog(Cog, name="Dev tools"):
     @is_owner()
     async def interrupt_cmd(self, ctx):
         """
-        (dev) Ouvre une console là où un @dev m'a lancé. :warning:
+        (dev) Open a console where a @dev has called it :warning:
 
-        A utiliser en dernier recours:
-         - le bot sera inactif pendant ce temps.
-         - toutes les commandes seront executées à sa reprise.
+        Use as last resource:
+         - the bot will be inctive during that time
+         - all commands will be executed when they are picked up
         """
 
         await ctx.send(
-            "J'ai été arrêté et une console interactive a été ouverte là où je tourne. "
-            "Toutes les commandes rateront tant que cette console est ouverte.\n"
-            "Soyez rapides, je déteste les opérations à coeur ouvert... :confounded:"
+            "I was shut down and an interactive console was opened where I am running."
+            "All commands will fail while this console is open.\n"
+            "Be quick, I hate open heart surgery ... :confounded:"
         )
 
         # Utility functions
@@ -85,7 +83,7 @@ class DevCog(Cog, name="Dev tools"):
         except EOFError:
             pass
 
-        await ctx.send("Tout va mieux !")
+        await ctx.send("Everything is going better!")
 
     @command()
     @is_owner()
@@ -95,7 +93,8 @@ class DevCog(Cog, name="Dev tools"):
 
     # ------------- Extensions -------------- #
 
-    def full_cog_name(self, name):
+    @staticmethod
+    def full_cog_name(name):
         name = COGS_SHORTCUTS.get(name, name)
         if not "." in name:
             name = f"src.cogs.{name}"
@@ -108,14 +107,14 @@ class DevCog(Cog, name="Dev tools"):
     @is_owner()
     async def reload_cmd(self, ctx, *names):
         """
-        (dev) Recharge une ou plusieurs extensions.
+        (dev) Reloads one or more extensions.
 
-        Ne pas passer d'argument recharge le bot lui même
-        mais sans toucher aux extensions (magie noire).
+        Without an argument, reloads the bot itself
+        but without touching the extensions (black magic).
 
-        A utiliser quand le code change. Arguments
-        possibles: noms des modules python ou juste
-        le nom des cogs. Certaines abbréviations existent.
+        To be used when the code changes. Arguments
+        possible: names of the python modules or just
+        the name of the cogs. Some abbreviations exist.
         """
 
         if not names:
@@ -157,9 +156,9 @@ class DevCog(Cog, name="Dev tools"):
     @is_owner()
     async def load_cmd(self, ctx, name):
         """
-        (dev) Ajoute une catégorie de commandes.
+        (dev) Add a category of commands.
 
-        Permet d'ajouter dynamiquement un cog sans redémarrer le bot.
+        Allows you to dynamically add a cog without restarting the bot.
         """
         name = self.full_cog_name(name)
 
@@ -203,6 +202,7 @@ class DevCog(Cog, name="Dev tools"):
     finally:
         self.eval_locals.update(locals())
 """
+
         else:
             full_query = query
 
@@ -247,7 +247,7 @@ class DevCog(Cog, name="Dev tools"):
     @command(name="eval", aliases=["e"])
     @is_owner()
     async def eval_cmd(self, ctx: Context):
-        """(dev) Evalue l'entrée."""
+        """(dev) Evaluate the entry."""
 
         self.eval_locals["ctx"] = ctx
 

@@ -11,6 +11,8 @@ __all__ = [
     "EMBED_COLOR",
     "FRACTAL_URL",
     "FRACTAL_COOLDOWN",
+    "OWNER_NAME",
+    "BOT_NAME",
     "File",
     "Emoji",
     "PREFIX",
@@ -36,7 +38,8 @@ PREFIX = "!"
 EMBED_COLOR = 0xFF0000
 FRACTAL_URL = "https://thefractal.space/img/{seed}.png?size=640"
 FRACTAL_COOLDOWN = 42  # seconds
-
+OWNER_NAME = "CozyFractal"
+BOT_NAME = "cozy-bot"
 
 class Role:
     ADMIN = "Admin"
@@ -58,7 +61,8 @@ class Emoji:
     CROSS = "❌"
     PLUS_1 = "👍"
     MINUS_1 = "👎"
-    RAINBOW_HEART = "<:rainbowheart:837416173603520522>"
+    RAINBOW_HEART = "<:rainbowheart:837416127725961246>"
+    PANDANGEL = "<:pandangel:834527570715607117>"
 
 
 class File:

@@ -36,7 +36,8 @@ class SettingsCog(CustomCog, name="Settings"):
         await ctx.send(embed=embed)
 
     @command(
-        name="set", usage="!set group.setting VALUE",
+        name="set",
+        usage="!set group.setting VALUE",
     )
     @check_role(Role.MODO)
     async def set_cmd(self, ctx: Context, name: str, *, value: str):

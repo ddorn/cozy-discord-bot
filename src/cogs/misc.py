@@ -1,8 +1,6 @@
 import ast
 import asyncio
-import datetime
 import io
-import itertools
 import math
 import operator as op
 import random
@@ -12,9 +10,8 @@ import urllib
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import partial
-from itertools import chain
 from math import factorial
-from operator import attrgetter, itemgetter
+from operator import itemgetter
 from time import time
 from typing import List, Set, Union
 
@@ -23,38 +20,27 @@ import discord
 import yaml
 from discord import (
     AllowedMentions,
-    ChannelType,
-    Guild,
     Member,
-    TextChannel,
 )
-from discord.abc import GuildChannel
+
 from discord.ext.commands import (
     BadArgument,
     command,
-    Command,
-    CommandError,
     Context,
     group,
-    Group,
-    guild_only,
     MemberConverter,
     RoleConverter,
 )
-from discord.utils import find, get
+from discord.utils import get
 from engine import (
     check_role,
     CogConfig,
     CozyError,
     CustomBot,
     CustomCog,
-    french_join,
-    mentions_to_id,
-    myembed,
-    start_time,
     with_max_len,
 )
-from src.cogs.perms import RuleSet
+
 from src.constants import *
 from src.engine import send_and_bin
 
@@ -130,7 +116,7 @@ class MiscCog(CustomCog, name="Divers"):
 
     @command(aliases=["<3", "❤️", ":heart:"])  # Emoji.RAINBOW_HEART])
     async def hug(self, ctx: Context, who="everyone"):
-        """Fait un câlin à quelqu'un. :heart:"""
+        """Give someone a hug. :heart:"""
 
         if who == "everyone":
             who = ctx.guild.default_role
@@ -145,25 +131,25 @@ class MiscCog(CustomCog, name="Divers"):
                 except BadArgument:
                     return await ctx.send(
                         discord.utils.escape_mentions(
-                            f'Il n\'y a pas de "{who}". :man_shrugging:'
+                            f'There is no "{who}". :man_shrugging:'
                         )
                     )
         who: Union[discord.Role, Member]
         bot_hug = who == self.bot.user
 
         bonuses = [
-            "C'est trop meuuuugnon !",
-            "Ça remonte le moral ! :D",
+            "It's too cuuute!",
+            "It boosts morale! :D",
             ":hugging:",
             ":smiling_face_with_3_hearts:",
             "Oh wiiii",
-            f"{who.mention} en redemande un !"
+            f"{who.mention} asks for one more!"
             if not bot_hug
-            else "J'en veux un autre ! :heart_eyes:",
-            "Le·a pauvre, iel est tout·e rouge !"
+            else "I want another one! :heart_eyes:",
+            "The poor is all red!"
             if not bot_hug
-            else "Un robot ne peut pas rougir, mais je crois que... :blush:",
-            "Hihi, il gratte ton pull en laine ! :sheep:",
+            else "A robot cannot blush, but I believe that ... :blush:",
+            "Hihi, their woolen sweater tickles! :sheep:",
         ]
 
         # if has_role(ctx.author, Role.PRETRESSE_CALINS):
@@ -174,40 +160,40 @@ class MiscCog(CustomCog, name="Divers"):
 
         if who.id == OWNER:
             bonuses += [
-                "Tiens... Ça sent le mojito... :lemon:",
+                "Wait... It smells like mojito... :lemon:",
                 ":green_heart: :lemon: :green_heart:",
             ]
 
         if who == ctx.author:
-            msg = f"{who.mention} se fait un auto-calin !"
+            msg = f"{who.mention} self-hug!"
             bonuses += [
-                "Mais c'est un peu ridicule...",
-                "Mais iel a les bras trop courts ! :cactus:",
-                "Il en faut peu pour être heureux :wink:",
+                "But it's a bit ridiculous ...",
+                "But his arms are too short! :cactus:",
+                "It takes little to be happy :wink:",
             ]
         elif who == ctx.guild.default_role:
-            msg = f"{ctx.author.mention} fait un câlin a touuuut le monde !"
+            msg = f"{ctx.author.mention} gives a hug to everyone!"
             bonuses += [
-                "Ça fait beaucoup de gens pour un câlin !",
-                "Plus on est, plus on est calins !",
-                "C'est pas très COVID-19 tout ça !",
-                "Tout le monde est heureux maintenant !",
+                "That's a lot of people for a hug!",
+                "The more we are, the more hugs we are!",
+                "It's not very COVID-19 all that!",
+                "Everyone is happy now!",
             ]
         elif bot_hug:
-            msg = f"{ctx.author.mention} me fait un gros câliiiiin !"
-            bonuses += ["Je trouve ça très bienveillant <3"]
+            msg = f"{ctx.author.mention} gives me a biiig huuug!"
+            bonuses += ["I find that really welcoming <3 !"]
         else:
-            msg = f"{ctx.author.mention} fait un gros câlin à {who.mention} !"
+            msg = f"{ctx.author.mention} gives a big hug to {who.mention} !"
             bonuses += [
-                f"Mais {who.mention} n'apprécie pas...",
-                "Et ils s'en vont chasser des canards ensemble :wink:",
-                "Oh ! Iel sent bon...",
-                "Et moi quand est ce que j'ai le droit à un calin ?",
-                f"{who.mention} a serré tellment fort qu'iel vous a coupé en deux :scream:",
-                f"{who.mention} propose à {ctx.author.mention} de se revoir autour d'une :pizza: !",
-                "Les drones du commissaire Winston passent par là et vous ordonnent d'arrêter.",
-                "Après ce beau moment de tendresse, ils décident d'aller discuter en créant des puzzles.",
-                f"{who.mention} se réfugie dans l'entrepôt d'Animath et bloque l'entrée avec un meuble.",
+                f"But {who.mention} doesn't like...",
+                "And they go hunting ducks together :wink:",
+                "Oh! It smells good...",
+                "And when am I entitled to a hug?"
+                f"{who.mention} squeezed so hard that they cut you in half: scream:",
+                f"{who.mention} suggests to {ctx.author.mention} to meet again around a :pizza:!",
+                "Commissioner Winston's drones are passing by and ordering you to stop.",
+                "After this beautiful moment of tenderness, they decide to go and discuss by creating puzzles.",
+                f"{who.mention} takes refuge in Animath's warehouse and blocks the entrance with a piece of furniture.",
             ]
 
         bonus = random.choice(bonuses)
@@ -228,13 +214,12 @@ class MiscCog(CustomCog, name="Divers"):
         last_hug: Hug = get(reversed(self.hugs), hugged=hugger)
         if not last_hug:
             return await ctx.send(
-                f"Personne n'a jamais fait de calin à {ctx.author.mention}, il faut y remédier !"
+                f"No one has ever hugged {ctx.author.mention}, we have to fix it!"
             )
 
-        if "coupé en deux" in last_hug.text:
+        if "cut you in half" in last_hug.text:
             return await ctx.send(
-                "Tu ne vas quand même pas faire un câlin à quelqu'un "
-                "que tu viens de couper en deux !"
+                "You're not going to hug someone after " "that you just cut in half!"
             )
 
         await ctx.invoke(self.hug, str(last_hug.hugger))
@@ -243,7 +228,7 @@ class MiscCog(CustomCog, name="Divers"):
     # @commands.has_role(Role.PRETRESSE_CALINS)
     @check_role(Role.MODO)
     async def hugs_stats_cmd(self, ctx: Context, who: Member = None):
-        """(prêtresse des calins) Affiche qui est le plus câliné """
+        """(priestess of hugs) posts who is the most warm"""
 
         if who is None:
             await self.send_all_hug_stats(ctx)
@@ -258,12 +243,12 @@ class MiscCog(CustomCog, name="Divers"):
             ":medal:",
             ":military_medal:",
         ]
-        ranks = ["Gros Nounours", "Petit Panda", "Ours en peluche"]
+        ranks = ["Big Teddy Bear", "Little Panda", "Teddy Bear"]
 
         embed = discord.Embed(
-            title="Prix du plus câliné",
+            title="More hugged prize",
             color=discord.Colour.magenta(),
-            description=f"Nombre de total de câlins : {len(self.hugs)} {Emoji.HEART}",
+            description=f"Total number of hugs {len(self.hugs)} {Emoji.HEART}",
         )
 
         everyone = ctx.guild.default_role.id
@@ -305,14 +290,14 @@ class MiscCog(CustomCog, name="Divers"):
             for id, qte in top[3 : min(8, len(top))]
         )
         if top4to7:
-            embed.add_field(name="Apprenti peluche", value=top4to7)
+            embed.add_field(name="Teddy apprentice", value=top4to7)
 
         top8to13 = "\n".join(
             f"{medals[4]} {self.name_for(ctx, id)} : {qte}  :yellow_heart:"
             for id, qte in top[8 : min(13, len(top))]
         )
         if top8to13:
-            embed.add_field(name="Pelote de laine de canard", value=top8to13)
+            embed.add_field(name="Ball of duck wool", value=top8to13)
 
         await ctx.send(embed=embed)
 
@@ -321,14 +306,14 @@ class MiscCog(CustomCog, name="Divers"):
         given = self.hugs_given(ctx, who.id)
         received = self.hugs_received(ctx, who.id)
         auto = self.auto_hugs(ctx, who.id)
-        cut = [h for h in given if "coupé en deux" in h.text]
+        cut = [h for h in given if "cut in half" in h.text]
         infos = {
-            "Câlins donnés": (len(given), 1),
-            "Câlins reçus": (len(received), 1),
-            "Personnes câlinées": (len(set(h.hugged for h in given)), 20),
-            "Câliné par": (len(set(h.hugger for h in received)), 30),
-            "Auto-câlins": ((len(auto)), 3),
-            "Morceaux": (len(cut), 30),
+            "Given hugs": (len(given), 1),
+            "Received hugs": (len(received), 1),
+            "Hugged people": (len(set(h.hugged for h in given)), 20),
+            "Hugges by": (len(set(h.hugger for h in received)), 30),
+            "Self hugs": ((len(auto)), 3),
+            "Parts": (len(cut), 30),
         }
 
         most_given = Counter(h.hugged for h in given).most_common(1)
@@ -340,12 +325,12 @@ class MiscCog(CustomCog, name="Divers"):
             title=f"Câlins de {who.display_name}",
             color=discord.Colour.magenta(),
             description=(
-                f"On peut dire que {who.mention} est très câlin·e, avec un score de "
-                f"{self.score_for(ctx, who.id)}. Iel a beaucoup câliné "
-                f"{self.name_for(ctx, most_given[0])} "
-                f"*({most_given[1]} :heart:)* et "
-                f"s'est beaucoup fait câliner par {self.name_for(ctx, most_received[0])} "
-                f"*({most_received[1]} :heart:)* !"
+                f"We can say that {who.mention} is very cuddly, with a score of "
+                f"{self.score_for (ctx, who.id)}. He cuddled a lot "
+                f"{self.name_for (ctx, most_given [0])}"
+                f"*({most_given [1]} :heart:)* and "
+                f"got hugged a lot by {self.name_for (ctx, most_received [0])} "
+                f"*({most_received [1]} :heart:)*!"
             ),
         )
         user: discord.User = self.bot.get_user(who.id)
@@ -353,7 +338,7 @@ class MiscCog(CustomCog, name="Divers"):
 
         for f, (v, h_factor) in infos.items():
             heart = self.heart_for_stat(v * h_factor)
-            if f == "Morceaux":
+            if f == "Parts":
                 v = 2 ** v
             embed.add_field(name=f, value=f"{v} {heart}")
 
@@ -373,7 +358,8 @@ class MiscCog(CustomCog, name="Divers"):
 
         return role is not None
 
-    def heart_for_stat(self, v):
+    @staticmethod
+    def heart_for_stat(v):
         hearts = [
             ":broken_heart:",
             ":green_heart:",
@@ -425,7 +411,8 @@ class MiscCog(CustomCog, name="Divers"):
         eq = partial(self.ris, ctx, who_id)
         return [h for h in self.hugs if eq(h.hugged) and eq(h.hugger)]
 
-    def get_hugs(self):
+    @staticmethod
+    def get_hugs():
         File.HUGS.touch()
         lines = File.HUGS.read_text().strip().splitlines()
         return [Hug.from_str(l) for l in lines]
@@ -438,7 +425,8 @@ class MiscCog(CustomCog, name="Divers"):
 
     # ---------------- Jokes ---------------- #
 
-    def load_jokes(self) -> List[Joke]:
+    @staticmethod
+    def load_jokes() -> List[Joke]:
         # Ensure it exists
         File.JOKES_V2.touch()
         with open(File.JOKES_V2) as f:
@@ -446,14 +434,15 @@ class MiscCog(CustomCog, name="Divers"):
 
         return jokes
 
-    def save_jokes(self, jokes):
+    @staticmethod
+    def save_jokes(jokes):
         File.JOKES_V2.touch()
         with open(File.JOKES_V2, "w") as f:
             yaml.safe_dump_all(jokes, f)
 
     @group(name="joke", invoke_without_command=True, case_insensitive=True)
     async def joke(self, ctx: Context, id=None):
-        """Fait discretement une blague aléatoire."""
+        """Quietly makes a random joke."""
 
         m: discord.Message = ctx.message
         await m.delete()
@@ -471,7 +460,7 @@ class MiscCog(CustomCog, name="Divers"):
         try:
             joke = jokes[joke_id]
         except IndexError:
-            raise CozyError("Il n'y a pas de blague avec cet ID.")
+            raise CozyError("There are no jokes with this ID.")
 
         if joke.file:
             file = discord.File(File.MEMES / joke.file)
@@ -487,7 +476,7 @@ class MiscCog(CustomCog, name="Divers"):
     @joke.command(name="new")
     @send_and_bin
     async def new_joke(self, ctx: Context):
-        """Ajoute une blague pour le concours de blague."""
+        """Add a joke for the joke contest."""
         jokes = self.load_jokes()
         joke_id = len(jokes)
 
@@ -503,7 +492,7 @@ class MiscCog(CustomCog, name="Divers"):
             joke.file = str(f"{joke_id}-{file.filename}")
             await file.save(File.MEMES / joke.file)
         elif not msg.strip():
-            return "Tu ne peux pas ajouter une blague vide..."
+            return "You can't add an empty joke..."
 
         jokes.append(joke)
         self.save_jokes(jokes)
@@ -513,6 +502,7 @@ class MiscCog(CustomCog, name="Divers"):
         await self.wait_for_joke_reactions(joke_id, message)
 
     async def wait_for_joke_reactions(self, joke_id, message):
+        # D: is the `u` parameter used
         def check(reaction: discord.Reaction, u):
             return (message.id == reaction.message.id) and str(reaction.emoji) in (
                 Emoji.PLUS_1,
@@ -544,13 +534,13 @@ class MiscCog(CustomCog, name="Divers"):
     @joke.command(name="top")
     @check_role(Role.MODO)
     async def best_jokes(self, ctx: Context):
-        """Affiche le palmares des blagues."""
+        """Displays the list of jokes ."""
 
         jokes = self.load_jokes()
 
         s = sorted(jokes, key=lambda j: len(j.likes) - len(j.dislikes), reverse=True)
 
-        embed = discord.Embed(title="Palmares des blagues.")
+        embed = discord.Embed(title="Best jokes.")
         for i, joke in enumerate(s[:10]):
             who = get(ctx.guild.members, id=joke.joker)
 
@@ -558,7 +548,7 @@ class MiscCog(CustomCog, name="Divers"):
             if joke.file:
                 text += " - image non inclue - "
 
-            name = who.display_name if who else "Inconnu"
+            name = who.display_name if who else "Unknown"
             embed.add_field(
                 name=f"{i} - {name} - {len(joke.likes)} :heart: {len(joke.dislikes)} :broken_heart:",
                 value=text,
@@ -569,15 +559,15 @@ class MiscCog(CustomCog, name="Divers"):
 
     @command(
         name="choose",
-        usage='choix1 choix2 "choix 3"...',
-        aliases=["choice", "choix", "ch"],
+        usage='choice1 choice2 "choice 3"...',
+        aliases=["choice", "choix", "ch", "elige"],
     )
     async def choose(self, ctx: Context, *args):
         """
-        Choisit une option parmi tous les arguments.
+        Choose an option from all the arguments.
 
-        Pour les options qui contiennent une espace,
-        il suffit de mettre des guillemets (`"`) autour.
+        For options that contain a space,
+        just put quotes (`"`) around.
         """
 
         if not args:
@@ -599,10 +589,10 @@ class MiscCog(CustomCog, name="Divers"):
     # )
     @command(rest_is_raw=True)
     async def fractal(self, ctx: Context, *, seed=None):
-        """Dessine une fractale aléatoire."""
+        """Draw a random fractal."""
 
         if self.computing:
-            return await ctx.send("Il y a déjà une fractale en cours de calcul...")
+            return await ctx.send("There is a fractal being calculated already")
 
         with ctx.channel.typing():
             try:
@@ -619,7 +609,7 @@ class MiscCog(CustomCog, name="Divers"):
                         if resp.status != 200:
                             print(resp)
                             return await ctx.send(
-                                "Il y a un problème pour calculer/télécharger l'image..."
+                                "There was a problem calculating or downloading the image..."  # D: maybe send?
                             )
                         data = io.BytesIO(await resp.read())
 
@@ -641,7 +631,7 @@ class MiscCog(CustomCog, name="Divers"):
 
     @command(name="calc", aliases=["="])
     async def calc_cmd(self, ctx, *args):
-        """Effectue un calcul simple"""
+        """Make a simple calculus"""
         with_tb = ctx.author.id == OWNER
         embed = self._calc(ctx.message.content, with_tb)
         resp = await ctx.send(embed=embed)
@@ -736,16 +726,14 @@ class MiscCog(CustomCog, name="Divers"):
         fields = ", ".join(
             f"{k}={getattr(node, k).__class__.__name__}" for k in node._fields
         )
-        raise TypeError(
-            f"Type de noeud non supporté: {node.__class__.__name__}({fields})"
-        )
+        raise TypeError(f"Node type not supported: {node.__class__.__name__}({fields})")
 
-    @command(name="Diego", hidden=True)
+    @command(name="Diego", aliases=[OWNER_NAME], hidden=True)
     async def diego_cmd(self, ctx):
-        msg = "C'est mon papa ! :smiling_face_with_3_hearts:"
+        msg = "He is my daddy! :smiling_face_with_3_hearts:"
 
         if random.random() < 0.05:
-            msg += "  (et il est célibataire <:pandange:776504246337798145>)"
+            msg += f"  (and he is single {Emoji.PANDANGEL})"
 
         await ctx.send(msg)
 

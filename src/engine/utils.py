@@ -180,7 +180,11 @@ def myembed(title="", descr="", color=EMBED_COLOR, **fields):
     Underscores are replaced with spaces in fields names.
     """
 
-    embed = discord.Embed(color=color, title=title, description=descr,)
+    embed = discord.Embed(
+        color=color,
+        title=title,
+        description=descr,
+    )
 
     for name, value in fields.items():
         if value not in (None, ""):

@@ -5,7 +5,7 @@ import discord
 from discord import CategoryChannel, Guild, TextChannel, VoiceChannel, Member
 from discord.utils import get
 
-from engine.utils import mentions_to_id, get_casefold
+from src.engine.utils import mentions_to_id, get_casefold
 
 if TYPE_CHECKING:
     from src.engine import CustomBot

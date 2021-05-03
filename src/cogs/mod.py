@@ -165,7 +165,10 @@ class ModCog(CustomCog, name="Moderation"):
         description = parts[0] if parts else None
 
         embed = discord.Embed(
-            title=title, description=description, color=color, url=url,
+            title=title,
+            description=description,
+            color=color,
+            url=url,
         )
 
         embed.set_footer(text=footer)
@@ -190,18 +193,18 @@ class ModCog(CustomCog, name="Moderation"):
     @command(name="reply")
     @is_owner()
     async def reply(self, ctx, channel: TextChannel, *msg):
-        """(dev) Envoie un message dans n'importe quel salon.
+        """(dev) Send a message to any channel.
 
-        Ne supprime pas le message original."""
+        Does not delete the original post."""
 
         await channel.send(" ".join(msg))
 
     @command(name="send-to")
     @is_owner()
     async def send_to_cmd(self, ctx, who: discord.User, *msg):
-        """(dev) Envoie un message privé à n'importe utilisateur.
+        """(dev) Send a private message to any user.
 
-        Ne supprime pas le message original."""
+        Does not delete the original post."""
 
         await who.send(" ".join(msg))
 
@@ -209,15 +212,15 @@ class ModCog(CustomCog, name="Moderation"):
     @is_owner()
     async def del_range_cmd(self, ctx: Context, id1: Message, id2: Message):
         """
-        (modo) Supprime les messages entre les deux IDs en argument.
+        (modo) Suppress the messages between the two IDs in argument.
 
-        Pour optenir les IDs des messages il faut activer le mode developpeur
-        puis clic droit > copier l'ID.
+        To opt for the IDs of the messages you must activate the developer mode
+        then right click> copy ID.
 
-        `id1` est le message le plus récent à supprimer.
-        `id2` est le message le plus ancien.
+        `id1` is the most recent message to delete.
+        `id2` is the oldest message.
 
-        Il est impossible de supprimer plus de 100 messages d'un coup.
+        You cannot delete more than 100 messages at once.
         """
 
         channel: TextChannel = id1.channel

@@ -10,7 +10,7 @@ from discord.ext.commands import CommandError
 class CozyError(CommandError):
     """Base class for all exceptions raised by the bot itself.
 
-     It contains a user-targeted message."""
+    It contains a user-targeted message."""
 
     def __init__(self, msg):
         super(CozyError, self).__init__(msg)

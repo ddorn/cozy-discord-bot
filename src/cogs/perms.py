@@ -233,7 +233,7 @@ class PermsCog(CustomCog, name="Permissions"):
         "perms", invoke_without_command=True, hidden=True, aliases=["p", "permissions"]
     )
     async def perms(self, ctx: Context):
-        """Affiche l'aide pour le setup des permissions."""
+        """Displays help for permission setup."""
         await ctx.invoke(self.bot.get_command("help"), "perms")
 
     @check_role(Role.MODO)
@@ -242,7 +242,7 @@ class PermsCog(CustomCog, name="Permissions"):
         """
         (modo) Setup des roles ou permissions automatiques.
 
-        TODO: write doc.
+        TODO: write doc. Note: traduir ou écrire en anglais
         """
 
         # Parse input
@@ -329,7 +329,10 @@ class PermsCog(CustomCog, name="Permissions"):
             Rule=rule.with_mentions() if rule is not None else "Deleting",
             Added=len(to_add),
             Removed=len(to_remove),
-            **{"Example added": ex_add, "Example removed": ex_rem,},
+            **{
+                "Example added": ex_add,
+                "Example removed": ex_rem,
+            },
         )
         if not await confirm(ctx, self.bot, embed=embed):
             return
@@ -407,14 +410,14 @@ class PermsCog(CustomCog, name="Permissions"):
     @check_role(Role.MODO)
     @perms.command("show")
     async def perms_show_cmd(self, ctx: Context):
-        """(modo) Affiche les permissions automatiques."""
+        """(modo) Show automatic permissions."""
 
         embed = discord.Embed(
             colour=EMBED_COLOR,
             title="Automatic permissions",
-            description="Voici la liste des roles et permissions de salon que "
-            "le bot synchronise sur ce serveur. Cette liste peut"
-            "être modifiée avec `!perm set` et `!perm del`.",
+            description="Here is the list of roles and channel permissions that "
+            "the bot is synchronizing on this server. This list can "
+            "be changed with`!perm set` and `!perm del`.",
         )
 
         # Okay, c'est un peu du code dupliqué... Mais pas tant que ça non plus
@@ -448,7 +451,7 @@ class PermsCog(CustomCog, name="Permissions"):
     @check_role(Role.MODO)
     @perms.command("del")
     async def perms_del_cmd(self, ctx: Context, channel_or_role):
-        """(modo) Supprime une regle automatique."""
+        """(modo) Delete an automatic rule."""
         item = self.input_chan_or_role(channel_or_role)
         if item not in self.rules:
             await ctx.send("Nothing to delete.")
