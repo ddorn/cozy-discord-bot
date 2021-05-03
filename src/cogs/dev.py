@@ -58,12 +58,23 @@ RE_QUERY = re.compile(
 class EvalResult:
     query: str
     stdout: StringIO
+    locals: dict
     result: object = None
     error: Exception = None
+
     page: int = 0
+    show_locals: bool = False
+
+    TRACKED_EMOJI = (
+        Emoji.PREVIOUS,
+        Emoji.NEXT,
+        Emoji.ABACUS,  # Toggle showing the locals
+    )
 
     def get_embed(self):
-        if self.error is not None:
+        if self.show_locals:
+            embed, pages = self.embed_for_locals(self.page)
+        elif self.error is not None:
             embed, pages = self.embed_for_error(self.page)
         else:
             embed, pages = self.embed_for_result(self.page)
@@ -71,6 +82,16 @@ class EvalResult:
         # Clamp
         self.page = max(0, min(pages - 1, self.page))
 
+        return embed, pages
+
+    def embed_for_locals(self, page):
+        txt, pages = paginate(" - " + "\n - ".join(self.locals), page=page)
+        embed = myembed(
+            "Evaluation locals",
+            f"There are {len(self.locals)} variables in the interpreter",
+            discord.Colour.dark_gold(),
+            _Variables=py(txt),
+        )
         return embed, pages
 
     def embed_for_error(self, page=0):
@@ -85,7 +106,7 @@ class EvalResult:
         if stdout:
             embed.add_field(name="Standard output", value=py(stdout), inline=False)
 
-        return embed, False  # TODO: support pagination here too
+        return embed, 1  # TODO: support pagination here too
 
     def embed_for_result(self, page=0):
         out = StringIO()
@@ -105,8 +126,7 @@ class EvalResult:
         return embed, max(pages1, pages2)
 
     async def add_reactions(self, msg: Message, clear=False):
-        reactions = (Emoji.PREVIOUS, Emoji.NEXT)
-        for rea in reactions:
+        for rea in self.TRACKED_EMOJI:
             if clear:
                 await msg.clear_reaction(rea)
             else:
@@ -114,10 +134,17 @@ class EvalResult:
 
     async def handle_reaction(self, ctx, bot_msg, reaction: Reaction):
         e = reaction.emoji
-        if e == Emoji.NEXT:
+        if e not in self.TRACKED_EMOJI:
+            return
+        elif e == Emoji.NEXT:
             self.page += 1
         elif e == Emoji.PREVIOUS:
             self.page -= 1
+        elif e == Emoji.ABACUS:
+            self.show_locals = not self.show_locals
+            self.page = 0
+        else:
+            raise ValueError("Match doesn't cover all cases.")
 
         await reaction.remove(ctx.author)
 
@@ -140,8 +167,7 @@ class EvalResult:
             bot_msg = edit
             await edit.edit(embed=embed)
 
-        if pages > 1:
-            await self.add_reactions(bot_msg)
+        await self.add_reactions(bot_msg)
 
         return bot_msg
 
@@ -341,9 +367,9 @@ class DevCog(Cog, name="Dev tools"):
                 else:
                     resp = eval(full_query, globs)
         except Exception as e:
-            return EvalResult(full_query, stdout, error=e)
+            return EvalResult(full_query, stdout, self.eval_locals, error=e)
         else:
-            return EvalResult(pretty_query, stdout, result=resp)
+            return EvalResult(pretty_query, stdout, self.eval_locals, result=resp)
 
     @command(name="eval", aliases=["e"])
     @is_owner()
@@ -389,6 +415,36 @@ class DevCog(Cog, name="Dev tools"):
             await result.add_reactions(bot_msg, clear=True)
         except discord.NotFound:
             pass
+
+    @command(name="eval-details", aliases=["ed"])
+    @is_owner()
+    async def eval_details_cmd(self, ctx: Context, name):
+        """Show attributes of an object in the interpreter."""
+
+        g = self._get_globals_for_exec(ctx.message)
+        if name not in g:
+            embed = myembed(
+                "Variable not found.",
+                "Here is a list of all the variables",
+                _Variables=py(" ".join(g)),
+            )
+        else:
+            obj = g[name]
+
+            attrs = getattr(obj, "__dict__", getattr(obj, "__slots__", []))
+            attrs = [a for a in attrs if not a.startswith("_")]
+            types = {k: type(getattr(obj, k)).__name__ for k in attrs}
+            values = [py(getattr(obj, attr)) for attr in attrs]
+            data = sorted(zip(attrs, values), key=lambda x: len(x[1]))
+
+            embed = myembed(
+                f"Variable {name}",
+                _repr=py(repr(obj)),
+                type=py(type(obj)),
+                **{"_" * (len(v) > 30) + f"`{k}` (`{types[k]}`)": v for k, v in data},
+            )
+
+        await ctx.send(embed=embed)
 
     # -------------- Listeners --------------- #
 

@@ -75,6 +75,7 @@ class Emoji:
     PANDANGEL = "<:pandangel:834527570715607117>"
     PREVIOUS = "◀"
     NEXT = "▶"
+    ABACUS = "🧮"
 
 
 class File:
