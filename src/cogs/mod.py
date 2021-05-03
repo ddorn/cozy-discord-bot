@@ -165,10 +165,7 @@ class ModCog(CustomCog, name="Moderation"):
         description = parts[0] if parts else None
 
         embed = discord.Embed(
-            title=title,
-            description=description,
-            color=color,
-            url=url,
+            title=title, description=description, color=color, url=url,
         )
 
         embed.set_footer(text=footer)

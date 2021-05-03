@@ -41,6 +41,7 @@ FRACTAL_COOLDOWN = 42  # seconds
 OWNER_NAME = "CozyFractal"
 BOT_NAME = "cozy-bot"
 
+
 class Role:
     ADMIN = "Admin"
     MODO = "Modo"

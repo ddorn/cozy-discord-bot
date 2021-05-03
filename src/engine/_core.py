@@ -348,10 +348,7 @@ class CustomBot(Bot):
                 pass
 
     async def log(
-        self,
-        level=10,
-        *args,
-        **kwargs,
+        self, level=10, *args, **kwargs,
     ):
         """Send something to the log channel.
 

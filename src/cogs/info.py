@@ -335,9 +335,7 @@ class InfoCog(CustomCog, name="Infos"):
 
         comms = await self.filter_commands(ctx, group.commands, sort=True)
         if not comms:
-            embed.add_field(
-                name="Sorry", value="There is no command for you here."
-            )
+            embed.add_field(name="Sorry", value="There is no command for you here.")
         else:
             names = ["!" + c.qualified_name for c in comms]
             width = max(map(len, names))

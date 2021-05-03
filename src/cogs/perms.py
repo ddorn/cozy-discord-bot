@@ -329,10 +329,7 @@ class PermsCog(CustomCog, name="Permissions"):
             Rule=rule.with_mentions() if rule is not None else "Deleting",
             Added=len(to_add),
             Removed=len(to_remove),
-            **{
-                "Example added": ex_add,
-                "Example removed": ex_rem,
-            },
+            **{"Example added": ex_add, "Example removed": ex_rem,},
         )
         if not await confirm(ctx, self.bot, embed=embed):
             return
