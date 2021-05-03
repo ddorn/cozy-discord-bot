@@ -38,10 +38,7 @@ COGS_SHORTCUTS = {
 }
 
 RE_QUERY = re.compile(
-    r"^"
-    + PREFIX
-    + " ?e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$",
-    re.DOTALL,
+    r"^e(val)?[ \n]+(`{1,3}(py(thon)?\n)?)?(?P<query>.*?)\n?(`{1,3})?\n?$", re.DOTALL,
 )
 
 
@@ -182,7 +179,13 @@ class DevCog(Cog, name="Dev tools"):
             categories = guild.categories
         send = lambda text: asyncio.create_task(channel.send(text))
 
-        query = re.match(RE_QUERY, msg.content).group("query")
+        content: str = msg.content
+        for p in await self.bot.get_prefix(msg):
+            if content.startswith(p):
+                content = content[len(p) :]
+                break
+
+        query = re.match(RE_QUERY, content).group("query")
 
         if not query:
             raise CozyError("No query found.")
