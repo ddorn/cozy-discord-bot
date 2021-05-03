@@ -261,8 +261,8 @@ class InfoCog(CustomCog, name="Infos"):
             title=f"Help for {BOT_NAME}",
             description="Here is a list of useful (or not) commands "
             "on this server. For more details just write "
-            "`!help COMMAND` replacing `COMMAND` by the name of "
-            "the command, for example`!help help`.",
+            f"`{PREFIX}help COMMAND` replacing `COMMAND` by the name of "
+            f"the command, for instance `{PREFIX}help help`.",
             color=EMBED_COLOR,
         )
 
@@ -280,7 +280,7 @@ class InfoCog(CustomCog, name="Infos"):
             if not cat:
                 continue
 
-            names = ["!" + c.qualified_name for c in cat]
+            names = [PREFIX + c.qualified_name for c in cat]
             width = max(map(len, names))
             names = [name.rjust(width) for name in names]
             short_help = [c.short_doc for c in cat]
@@ -299,18 +299,18 @@ class InfoCog(CustomCog, name="Infos"):
         return await ctx.send(embed=embed)
 
     async def send_command_help(self, ctx, args):
-        name = " ".join(args).strip("!")
+        name = " ".join(args).strip(PREFIX)
         comm: Command = self.bot.get_command(name)
         if comm is None:
             return await ctx.send(
-                f"`!{name}` command doesn't exists"
-                f"Use `!help` to get  list of commands."
+                f"`{PREFIX}{name}` command doesn't exists"
+                f"Use `{PREFIX}help` to get  list of commands."
             )
         elif isinstance(comm, Group):
             return await self.send_group_help(ctx, comm)
 
         embed = discord.Embed(
-            title=f"Help for `!{comm.qualified_name}` command",
+            title=f"Help for `{PREFIX}{comm.qualified_name}` command",
             description=comm.help,
             color=EMBED_COLOR,
         )
@@ -320,7 +320,7 @@ class InfoCog(CustomCog, name="Infos"):
             embed.add_field(name="Alias", value=aliases, inline=True)
         if comm.signature:
             embed.add_field(
-                name="Usage", value=f"`!{comm.qualified_name} {comm.signature}`"
+                name="Usage", value=f"`{PREFIX}{comm.qualified_name} {comm.signature}`"
             )
         embed.set_footer(text=f"Suggestions? Problems? Send a message to @{OWNER_NAME}")
 
@@ -328,7 +328,7 @@ class InfoCog(CustomCog, name="Infos"):
 
     async def send_group_help(self, ctx, group: Group):
         embed = discord.Embed(
-            title=f"Help for the group of commands `!{group.qualified_name}`",
+            title=f"Help for the group of commands `{PREFIX}{group.qualified_name}`",
             description=group.help,
             color=EMBED_COLOR,
         )
@@ -337,7 +337,7 @@ class InfoCog(CustomCog, name="Infos"):
         if not comms:
             embed.add_field(name="Sorry", value="There is no command for you here.")
         else:
-            names = ["!" + c.qualified_name for c in comms]
+            names = [PREFIX + c.qualified_name for c in comms]
             width = max(map(len, names))
             just_names = [name.rjust(width) for name in names]
             short_help = [c.short_doc for c in comms]
@@ -353,7 +353,8 @@ class InfoCog(CustomCog, name="Infos"):
                 embed.add_field(name="Alias", value=aliases, inline=True)
             if group.signature:
                 embed.add_field(
-                    name="Usage", value=f"`!{group.qualified_name} {group.signature}`"
+                    name="Usage",
+                    value=f"`{PREFIX}{group.qualified_name} {group.signature}`",
                 )
 
             embed.add_field(
@@ -361,7 +362,7 @@ class InfoCog(CustomCog, name="Infos"):
                 value=f"For more details about a command, "
                 f"you have to write `!help COMMAND` replacing "
                 f"COMMAND with the desired command.\n"
-                f"Example: `!help {random.choice(names)[1:]}`",
+                f"Example: `{PREFIX}help {random.choice(names)[1:]}`",
             )
         embed.set_footer(text=f"Suggestions? Problems? Send a message to @{OWNER_NAME}")
 
