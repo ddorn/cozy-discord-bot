@@ -98,7 +98,7 @@ def send_and_bin(f):
     """
     Decorator that allows a command in a cog to just return
     the messages that needs to be sent, and allow the author that
-    trigger the message de delete it.
+    trigger the message to delete it.
     """
 
     @wraps(f)

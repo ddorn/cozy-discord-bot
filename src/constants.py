@@ -1,5 +1,3 @@
-import os
-import sys
 from pathlib import Path
 import argparse
 
@@ -38,7 +36,7 @@ if DISCORD_TOKEN is None:
     print()
     quit(1)
 
-OWNER = 430566197868625920  # Diego's id
+OWNER = 430566197868625920 if not IS_TEST_BOT else 691691416799150152
 BOT = 837400346808549417 if not IS_TEST_BOT else 838683880604958741
 MAIN_GUILD = 822820580889853952
 DIEGO_MENTION = f"<@{OWNER}>"
@@ -52,9 +50,9 @@ BOT_NAME = "Botzy" if not IS_TEST_BOT else "Botzy Dev"
 
 
 class Role:
-    ADMIN = "Admin"
-    MODO = "Modo"
-    ORGA = "Orga"
+    ADMIN = "admin lmao"
+    MODO = "moderatorum"
+    ORGA = "organization"
 
 
 class Channels:
@@ -89,6 +87,7 @@ class File:
     CONFIG = DATA / "config.yaml"
     MEMES = DATA / "memes"
     JOKES_V2 = DATA / "jokes.yaml"
+    PING = DATA / "ping"
 
 
 if not File.DATA.exists():

@@ -42,7 +42,7 @@ from engine import (
 )
 
 from src.constants import *
-from src.engine import send_and_bin
+from src.engine import send_and_bin, utils
 
 # supported operators
 OPS = {
@@ -440,6 +440,8 @@ class MiscCog(CustomCog, name="Divers"):
         with open(File.JOKES_V2, "w") as f:
             yaml.safe_dump_all(jokes, f)
 
+    # ---------------- Joke ----------------- #
+
     @group(name="joke", invoke_without_command=True, case_insensitive=True)
     async def joke(self, ctx: Context, id=None):
         """Quietly makes a random joke."""
@@ -546,7 +548,7 @@ class MiscCog(CustomCog, name="Divers"):
 
             text = joke.joke
             if joke.file:
-                text += " - image non inclue - "
+                text += " - no image included - "
 
             name = who.display_name if who else "Unknown"
             embed.add_field(
@@ -556,6 +558,23 @@ class MiscCog(CustomCog, name="Divers"):
             )
 
         await ctx.send(embed=embed)
+
+    # @joke.command(name="del")
+    # @check_role(Role.MODO)
+    # async def delete_joke(self, ctx: Context, identifier):
+    #     """Deletes a joke by ID"""
+    #     try:
+    #         identifier = int(identifier)
+    #     except ValueError:
+    #         raise ValueError('You should give an integer as argument')
+    #     jokes = self.load_jokes()
+    #     if identifier >= len(jokes):
+    #         raise IndexError('You gave a role identifier out of range')
+    #     else:
+    #         del jokes[identifier]
+    #         self.save_jokes(jokes)
+
+    # ---------------- Choose ----------------- #
 
     @command(
         name="choose",
@@ -736,6 +755,112 @@ class MiscCog(CustomCog, name="Divers"):
             msg += f"  (and he is single {Emoji.PANDANGEL})"
 
         await ctx.send(msg)
+
+    # ---------------- Stream ----------------- #
+    
+    @staticmethod
+    def load_pings():
+        return [user for user in File.PING.read_text().split("\n") if user]
+    
+    @staticmethod
+    def save_pings(ping):
+        File.PING.write_text("\n".join(ping))
+
+    @group(name="stream", invoke_without_command=True, case_insensitive=True)
+    async def stream(self, ctx):
+        """Have a look at the users in the memento ping list."""
+        ping = self.load_pings()
+        embed = discord.Embed(
+            title="Memento ping list",
+            description="\n".join((f"<@{user}>" for user in ping)),
+            color=EMBED_COLOR
+        )
+        await ctx.send(embed=embed)
+
+    @stream.command(name="ping")
+    async def stream_ping(self, ctx: Context):
+        """Ping all users in the memento ping list to announce your stream."""
+        ping = self.load_pings()
+        msg = "Hey " + ", ".join((f"<@{user}>" for user in ping)) + f"!\n<@{ctx.message.author.id}> is gonna stream!"
+        await ctx.send(msg)
+
+    @stream.command(name="addme")
+    async def stream_addme(self, ctx: Context):
+        """Add yourself to the memento ping list"""
+        user_id = str(ctx.message.author.id)
+        ping = self.load_pings()
+        if user_id in ping:
+            await ctx.send("You are already in the ping list!")
+        else:
+            ping.append(user_id)
+            self.save_pings(ping)
+        embed = discord.Embed(
+            title="Memento ping list",
+            description="\n".join(("<@" + user.replace("\n", "") + ">" for user in ping)),
+            color=EMBED_COLOR
+        )
+        await ctx.send(embed=embed)
+
+    @check_role(Role.ADMIN)
+    @stream.command(name="add")
+    async def stream_add(self, ctx, who: Member = None):
+        """Adds a user to the stream-ping-list"""
+        if who:
+            user_id = str(who.id)
+            ping = self.load_pings()
+            if user_id in ping:
+                await ctx.send("User already in the ping list!")
+            else:
+                ping.append(user_id)
+                self.save_pings(ping)
+
+            embed = discord.Embed(
+                title="Memento ping list",
+                description="\n".join(("<@" + user.replace("\n", "") + ">" for user in ping)),
+                color=EMBED_COLOR
+            )
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send("You must give a user to add to the list")
+
+    @stream.command(name="delme")
+    async def stream_delme(self, ctx: Context):
+        """Remove yourself from the memento ping list."""
+        user_id = str(ctx.message.author.id)
+        ping = self.load_pings()
+        if user_id not in ping:
+            await ctx.send("You are not in the ping list!")
+        else:
+            ping.remove(user_id)
+            self.save_pings(ping)
+        embed = discord.Embed(
+            title="Memento ping list",
+            description="\n".join(("<@" + user.replace("\n", "") + ">" for user in ping)),
+            color=EMBED_COLOR
+        )
+        await ctx.send(embed=embed)
+
+    @check_role(Role.ADMIN)
+    @stream.command(name="del")
+    async def stream_del(self, ctx, who: Member = None):
+        """Removes a user from the stream-ping-list"""
+
+        if who:
+            user_id = str(who.id)
+            ping = self.load_pings()
+            if user_id not in ping:
+                await ctx.send("Unable to delete user. It is not in the ping list")
+            else:
+                ping.remove(user_id)
+                self.save_pings(ping)
+            embed = discord.Embed(
+                title="Memento ping list",
+                description="\n".join((f"<@{user}>" for user in ping)),
+                color=EMBED_COLOR
+            )
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send("You must give a user to add to the list")
 
 
 def setup(bot: CustomBot):
